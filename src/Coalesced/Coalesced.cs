@@ -1,6 +1,4 @@
-﻿using static System.Collections.Specialized.BitVector32;
-
-namespace UnrealLib.Coalesced
+﻿namespace UnrealLib.Coalesced
 {    
     public class Property : IDeserializable<Property>, ISerializable
     {

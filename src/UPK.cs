@@ -3,21 +3,32 @@ using UnrealLib.Core;
 
 namespace UnrealLib
 {
-    /// <summary>
-    /// Manages the data associated with an Unreal Package
-    /// </summary>
+    // This should really just be an extension to FNameEntry
+    public class NameInfo
+    {
+        public List<FObjectImport> Imports { get; set; } = new();   // References to all import objects who use this name
+        public List<FObjectExport> Exports { get; set; } = new();   // References to all export objects who use this name
+        public int MinExportInstance { get; set; } = int.MaxValue;  // The lowest observed instance used by any exports, if any
+        public int MinImportInstance { get; set; } = int.MaxValue;  // The lowest observed instance used by any imports, if any
+
+        public override string ToString()
+        {
+            return $"Import count: {Imports.Count}\nExport count: {Exports.Count}\nMin export instance: {MinExportInstance}\nMin import instance: {MinImportInstance}";
+        }
+    }
+
     public class UPK
     {
-        public UnrealStream UnStream { get; }
+        public UnrealStream UnStream { get; init; }
+        public FPackageFileSummary Summary { get; private set; } = new();
+        public List<FNameEntry> Names { get; private set; }
+        public List<FObjectImport> Imports { get; private set; }
+        public List<FObjectExport> Exports { get; private set; }
+        public List<List<int>> Depends { get; private set; }
 
-        public FPackageFileSummary Summary { get; internal set; }
-        public List<FNameEntry> Names { get; internal set; }            // Table of all strings used throughout the package, excluding Summary FolderName
-        public List<FObjectImport> Imports { get; internal set; }       // Table of all objects referenced by this package
-        public List<FObjectExport> Exports { get; internal set; }       // Table of all objects contained within this package
-        public List<List<int>> Depends { get; internal set; }           // 2d int array. Each element corresponds to an index in the export table, each with an array of indexes to the import table
-
-        public bool Modified { get; set; } = false; // IBPatcher. Shouldn't this be declared in ITS project?
-        public bool FailedDeserialization { get; private set; } = false;
+        // Transient
+        public Dictionary<int, NameInfo> NameMap { get; private set; }  // A dictionary for each name index containing usage info
+        public bool Modified { get; set; } = false;
 
         public UPK(string filePath)
         {
@@ -31,114 +42,187 @@ namespace UnrealLib
             Initialize();
         }
 
+        /// <summary>
+        /// Reads in the package summary and the name/import/export tables
+        /// </summary>
         private void Initialize()
         {
-            // Deserialize Unreal package summary
             UnStream.Position = 0;
-            Summary = new FPackageFileSummary().Deserialize(UnStream);
+            Summary.Deserialize(UnStream);
 
-            if (Summary.Tag != FPackageFileSummary.TAG)
+            Names = new List<FNameEntry>(Summary.NameCount);
+            NameMap = new Dictionary<int, NameInfo>(Summary.NameCount);
+            for (int i = 0; i < Summary.NameCount; i++)
             {
-                FailedDeserialization = true;
-                return;
+                FNameEntry nameEntry = new FNameEntry().Deserialize(UnStream);
+                Names.Add(nameEntry);
+
+                NameMap[i] = new NameInfo();
             }
 
-            // Read rest of header
-            Names = UnStream.ReadObjectList<FNameEntry>(Summary.NameCount);
-            Imports = UnStream.ReadObjectList<FObjectImport>(Summary.ImportCount);
-            Exports = UnStream.ReadObjectList<FObjectExport>(Summary.ExportCount);
-            // Depends = UnStream.ReadDependsMap(Summary.ExportCount);  // always empty for Infinity Blade games, so faster to simply skip
-            UnStream.Position += Summary.ExportCount * 4;
+            Imports = new List<FObjectImport>(Summary.ImportCount);
+            for (int i = 0; i < Summary.ImportCount; i++)
+            {
+                FObjectImport import = new FObjectImport().Deserialize(UnStream);
+                import.Index = i;
+                Imports.Add(import);
+
+                FName name = import.ObjectName;
+                NameMap[name.NameIndex].Imports.Add(import);
+                NameMap[name.NameIndex].MinImportInstance = Math.Min(NameMap[name.NameIndex].MinImportInstance, name.NameInstance);
+            }
+
+            Exports = new List<FObjectExport>(Summary.ExportCount);
+            for (int i = 0; i < Summary.ExportCount; i++)
+            {
+                FObjectExport export = new FObjectExport().Deserialize(UnStream);
+                export.Index = i;
+                Exports.Add(export);
+
+                FName name = export.ObjectName;
+                NameMap[name.NameIndex].Exports.Add(export);
+                NameMap[name.NameIndex].MinExportInstance = Math.Min(NameMap[name.NameIndex].MinExportInstance, name.NameInstance);
+            }
         }
 
-        #region Helper methods
-
-        #region GetName
-
+        /// <summary>
+        /// Returns the string representation of an FName
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
         public string GetName(FName name)
         {
-            return $"{Names[name.NameIndex].Name}{(name.NameInstance > 0 ? $"_{name.NameInstance - 1}" : "")}";
+            return $"{Names[name.NameIndex]}{(name.NameInstance > 0 ? $"_{name.NameInstance - 1}" : "")}";
         }
 
         /// <summary>
-        /// Returns the name of the object at the specified index. Index less than 0 represents an import object, index more than 0 represents an export object.
+        /// Returns the string representation of an object's full path
         /// </summary>
-        /// <param name="objIdx"></param>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="obj"></param>
         /// <returns></returns>
-        public string GetName(int objIdx)
+        public string GetName(FObjectResource obj, bool returnFullName = true)
         {
-            if (objIdx == 0) return string.Empty;
-            if (objIdx < 0)
-            {
-                return GetName(Imports[~objIdx].ObjectName);
-            }
-            return GetName(Exports[objIdx - 1].ObjectName);
-        }
-
-        /// <summary>
-        /// Returns the full name of the passed export object
-        /// </summary>
-        /// <param name="e"></param>
-        /// <returns></returns>
-        public string GetName(FObjectExport e)
-        {
+            if (!returnFullName) return GetName(obj.ObjectName);
             var sb = new StringBuilder();
-            int parentIndex = e.OuterIndex;
 
-            while (parentIndex != 0)
+            FObjectResource parent = obj;
+            while (true)
             {
-                sb.Insert(0, $"{GetName(Exports[--parentIndex].ObjectName)}.");
-                parentIndex = Exports[parentIndex].OuterIndex;
-            }
+                sb.Insert(0, $".{GetName(parent.ObjectName)}");
 
-            return sb.Append(GetName(e.ObjectName)).ToString();
+                if (parent.OuterIndex == 0) break;
+                parent = parent.OuterIndex > 0 ? Exports[parent.OuterIndex - 1] : Imports[~parent.OuterIndex];
+            }
+            sb.Remove(0, 1);  // Remove leftover '.' prefix
+
+            return sb.ToString();
         }
 
-        #endregion
-
-        public int GetNameIndex(string value)
+        /// <summary>
+        /// Looks for a name in the names table and returns a new FName pointing to it.
+        /// Instances are automatically handled, and string comparisons are case-insensitive.
+        /// </summary>
+        /// <param name="value">The string value to find within the name table</param>
+        /// <returns>A new FName object upon success, otherwise null</returns>
+        public FName? FindName(string value)
         {
+            string key;
+            int instance;
+
+            int idx = value.LastIndexOf('_');
+            if (idx != 0)
+            {
+                if (!int.TryParse(value[(idx + 1)..], out instance))
+                {
+                    key = value;
+                }
+                else key = value[..idx];
+            }
+            else
+            {
+                key = value;
+                instance = 0;
+            }
+
             for (int i = 0; i < Names.Count; i++)
             {
-                if (Names[i] == value) return i;
+                if (string.Equals(Names[i].Name, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (NameMap[i].Exports.Count > 0 && NameMap[i].MinExportInstance > 1) instance--;  // For UEE consistency
+
+                    instance += NameMap[i].MinExportInstance;
+                    return new FName() { NameIndex = i, NameInstance = instance };
+                }
             }
-            return -1;
+            return null;
         }
 
         /// <summary>
-        /// Finds an object whose name matches the given string and returns its index
+        /// Wrapper for <see cref="FindName(string)"/>. Splits object paths into its components (e.g. "a.b.c" => "a", "b", "c")
+        /// and processes each name separately
         /// </summary>
         /// <param name="value"></param>
-        /// <returns></returns>
-        public int GetObjectIndex(string value) // @TODO make case-insensitive
+        /// <returns>An array of FNames upon success of all components, otherwise null</returns>
+        public FName[]? FindName(string[] value)
         {
-            // First try separate the leaf name from the full name
-            string leafName = value[(value.LastIndexOf('.')+1)..];
-            string parentNames = value != leafName ? value[..value.LastIndexOf('.')] : string.Empty;
-
-            // Then verify leafName is within this package's name table
-            int nameIndex = GetNameIndex(leafName);
-            if (nameIndex == -1) return 0;
-
-            // Search exports for leaf name + full name if applicable
-            for (int i = 0; i < Exports.Count; i++)
+            FName[] result = new FName[value.Length];
+            for (int i = 0; i < value.Length; i++)
             {
-                if (Exports[i].ObjectName.NameIndex == nameIndex)
-                {
-                    if (!string.IsNullOrEmpty(parentNames) && GetName(Exports[i]) != value) continue;
-                    return i + 1;
-                }
+                result[i] = FindName(value[i]);
+                if (result[i] is null) return null;
             }
-
-            // Search imports for leaf name
-            for (int i = 0; i < Imports.Count; i++)
-            {
-                if (Imports[i].ObjectName.NameIndex == nameIndex) return ~i;
-            }
-
-            return 0;
+            return result;
         }
 
-        #endregion
+        /// <summary>
+        /// Finds an export matching the passed value.
+        /// 'Value' is converted into FName(s) as needed. Case-insensitive
+        /// </summary>
+        /// <param name="value"></param>
+        /// <returns>The requested FObjectExport object on success, otherwise null</returns>
+        public FObjectExport? FindExport(string value)
+        {
+            FName[]? names = FindName(value.Split('.'));
+            if (names is null) return null;
+
+            // @TODO expand to include Import objects too
+            // Find the furthest child export object
+            foreach (FObjectExport export in NameMap[names[^1].NameIndex].Exports)
+            {
+                if (export.ObjectName == names[^1])
+                {
+                    // Compare full path. Leaf name is unfortunately checked again
+                    FObjectResource parent = export;
+                    int i = names.Length - 1;
+                    while (i >= 0 && parent.ObjectName == names[i])
+                    {
+                        if (i == 0 || parent.OuterIndex == 0)
+                        {
+                            if (i == 0) return export;
+                            break;
+                        }
+
+                        parent = parent.OuterIndex > 0 ? Exports[parent.OuterIndex - 1] : Imports[~parent.OuterIndex];
+                        i--;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Returns the object whose serialized bytes include the passed offset
+        /// </summary>
+        /// <param name="offset"></param>
+        /// <returns></returns>
+        public FObjectExport? GetObjectAtOffset(long offset)
+        {
+            foreach (var export in Exports)
+            {
+                if (export.SerialOffset + export.SerialSize >= offset) return export;
+            }
+            return null;
+        }
     }
 }

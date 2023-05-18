@@ -7,6 +7,8 @@
     {
         public FName ObjectName { get; internal set; }
         public int OuterIndex { get; internal set; }
+        // Transient
+        public int Index { get; internal set; }  // index into respective table
     }
 
     /// <summary>
