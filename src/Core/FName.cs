@@ -1,4 +1,6 @@
-﻿namespace UnrealLib.Core
+﻿using System.Buffers.Binary;
+
+namespace UnrealLib.Core
 {
     /// <summary>
     /// References an existing FNameEntry in the name table via index. Additionally uses an instance delimiter
@@ -20,12 +22,38 @@
             unStream.Write(NameIndex);
             unStream.Write(NameInstance);
         }
-
-        public static bool operator ==(FName a, FName b)
+        
+        /// <summary>
+        /// Writes the FName to a byte array
+        /// </summary>
+        /// <returns>A byte array containing the serialized FName</returns>
+        public byte[] Serialize()
         {
-            return a.NameIndex == b.NameIndex && a.NameInstance == b.NameInstance;
+            byte[] outputBuffer = new byte[8];
+
+            // Write NameIndex to the output buffer
+            BinaryPrimitives.WriteInt32LittleEndian(outputBuffer, NameIndex);
+
+            // Write NameInstance to the output buffer at index 4
+            BinaryPrimitives.WriteInt32LittleEndian(outputBuffer.AsSpan(4), NameInstance);
+
+            return outputBuffer;
         }
+
+        public static bool operator ==(FName a, FName b) =>
+            a.NameIndex == b.NameIndex && a.NameInstance == b.NameInstance;
         public static bool operator !=(FName a, FName b) => !(a == b);
+
+        public static bool operator ==(FName a, int b) => a.NameIndex == b;
+        public static bool operator !=(FName a, int b) => a.NameIndex != b;
+        
+        public static bool operator ==(FName a, int? b) => a.NameIndex == b;
+        public static bool operator !=(FName a, int? b) => a.NameIndex != b;
+
+        public string ToString(UPK upk)
+        {
+            return $"{upk.Names[NameIndex].Name}{(NameInstance > 0 ? $"_{(NameInstance - 1).ToString()}" : "")}";
+        }
     }
 
     /// <summary>
