@@ -20,13 +20,13 @@
             return this;
         }
 
-        //public void Serialize(UnrealStream stream)
-        //{
-        //    //stream.Write(A);
-        //    //stream.Write(B);
-        //    //stream.Write(C);
-        //    //stream.Write(D);
-        //}
+        public void Serialize(UnrealStream stream)
+        {
+            stream.Write(A);
+            stream.Write(B);
+            stream.Write(C);
+            stream.Write(D);
+        }
 
         public override string ToString()
         {

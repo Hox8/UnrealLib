@@ -13,6 +13,7 @@ namespace UnrealLib
         {
             _unReader = new BinaryReader(memStream);
             _unWriter = new BinaryWriter(memStream);
+            Position = 0;
         }
 
         public UnrealStream(byte[] value)
@@ -21,6 +22,7 @@ namespace UnrealLib
             memStream.Write(value);
             _unReader = new BinaryReader(memStream);
             _unWriter = new BinaryWriter(memStream);
+            Position = 0;
         }
 
         #region Read methods
