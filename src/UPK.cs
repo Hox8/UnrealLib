@@ -1,4 +1,7 @@
-﻿using System.Text;
+﻿using System.Collections.Generic;
+using System.IO;
+using System;
+using System.Text;
 using UnrealLib.Core;
 using UnrealLib.UnrealScript;
 
@@ -53,7 +56,8 @@ namespace UnrealLib
 
         // Transient
         public Dictionary<int, NameInfo>
-            NameMap { get; private set; } // A dictionary for each name index containing usage info
+            NameMap
+        { get; private set; } // A dictionary for each name index containing usage info
 
         public bool Modified { get; set; } = false;
 
@@ -309,38 +313,25 @@ namespace UnrealLib
         }
 
         /// <summary>
-        /// For DEBUG testing only; not meant for public api.
-        /// Copies function data to end of archive and changes its length by amt.
+        /// Replaces an export's data with passed in bytes. Header size and offset values are updated automatically.
         /// </summary>
-        /// <param name="f">UFunction reference</param>
-        /// <param name="e">FObjectExport reference</param>
-        /// <param name="amt">Int number of bytes to adjust by</param>
-        public void MoveExtendFunc(UFunction f, FObjectExport e, int amt)
+        /// <param name="export"></param>
+        /// <param name="newData"></param>
+        public void ReplaceExportData(FObjectExport export, ref byte[] newData)
         {
-            if (amt < 0) return;
+            // Update export size and offset to match newData + current UnStream length
+            // Write new data to EOF
 
-            // Determine whether function returns a return value (crappy method)
+            export.SerialOffset = UnStream.Length;
+            export.SerialSize = newData.Length;
 
-            f.Script.AddRange(new List<byte>(Enumerable.Repeat((byte)0x0B, amt)));
-            f.ScriptBytecodeSize += amt;
-            f.ScriptStorageSize += amt;
-            e.SerialSize += amt;
-            e.SerialOffset = UnStream.Length;
-            if ((f.FunctionFlags & UFunction.EFunctionFlags.FUNC_Native) != 0)
-            {
-                // f.FunctionFlags &= ~UFunction.EFunctionFlags.FUNC_Native;
-                // f.FunctionFlags |= UFunction.EFunctionFlags.FUNC_Simulated;
-                // f.FunctionFlags &= ~UFunction.EFunctionFlags.FUNC_Static;
-            }
-
-            f.FunctionFlags = UFunction.EFunctionFlags.FUNC_Public;
-            f.FunctionFlags |= UFunction.EFunctionFlags.FUNC_Simulated;
-
-            UnStream.Position = e.Offset;
-            e.Serialize(this);
+            // Update sizes manually because this old version of ULib is useless
+            UnStream.Position = export.Offset + 32;
+            UnStream.Write(export.SerialSize);
+            UnStream.Write(export.SerialOffset);
 
             UnStream.Position = UnStream.Length;
-            f.Serialize(this);
+            UnStream.Write(newData);
         }
 
         /// <summary>
@@ -352,7 +343,7 @@ namespace UnrealLib
         public UObject? DeserializeObject(FObjectExport export)
         {
             if (export is null) return null;
-            
+
             // If export has a class index of 0, it is a UClass object
             string name = export.ClassIndex == 0 ? "Core.Class" :
                 export.ClassIndex > 0 ? GetName(Exports[export.ClassIndex - 1]) : GetName(Imports[~export.ClassIndex]);
@@ -361,7 +352,7 @@ namespace UnrealLib
             {
                 case "Core.ScriptStruct":
                     return new UScriptStruct(this, export);
-                
+
                 case "Core.Function":
                     return new UFunction(this, export);
 
