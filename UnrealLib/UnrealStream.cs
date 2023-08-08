@@ -12,7 +12,12 @@ public sealed class UnrealStream : IDisposable
     private readonly BinaryWriter _writer;
     public bool ForceUnicode = false; // Forces strings to be serialized in unicode, even if they can fit into ascii
     public bool IsLoading = false;
-    public bool IsSaving = false;
+
+    public bool IsSaving
+    {
+        get => !IsLoading;
+        set => IsLoading = !value;
+    }
 
     // @WARN: UnrealStream cannot detect external changes to memStream
     public UnrealStream(MemoryStream memStream, UnrealPackage? unPackage = null)

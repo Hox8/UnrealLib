@@ -16,14 +16,10 @@ public class Coalesced : IDisposable, IUnrealStreamable
         Game = game;
     }
 
-    /// <summary>
     /// Whether to encrypt the coalesced data using the appropriate game key when saved (IB1 ignores this setting).
-    /// </summary>
     public bool DoSaveEncryption { get; set; } = true;
 
-    /// <summary>
-    ///  Whether to force Unicode encoding for strings, even when ASCII is sufficient.
-    /// </summary>
+    /// Whether to force Unicode encoding for strings, even when ASCII is sufficient.
     public bool ForceUnicode { get; set; } = false;
     public bool InitFailed { get; set; }
     public bool Modified { get; set; } = false;
@@ -70,7 +66,7 @@ public class Coalesced : IDisposable, IUnrealStreamable
     }
 
     /// <summary>
-    /// If coalesced stream is encrypted, try and decrypt it before deserialization.
+    ///     If coalesced stream is encrypted, try and decrypt it before deserialization.
     /// </summary>
     /// <returns>True if resulting ini stream is unencrypted (ready for use), false otherwise.</returns>
     private bool TryDecrypt()
@@ -85,7 +81,7 @@ public class Coalesced : IDisposable, IUnrealStreamable
 
     // @TODO: A static serializer would work well here. Probably something to think about moving forward.
     /// <summary>
-    /// Used to split and save the coalesced to PC-equivalent ini files on disk. STUB.
+    ///     Used to split and save the coalesced to PC-equivalent ini files on disk. STUB.
     /// </summary>
     /// <param name="outDir">The output folder path to save the ini files to.</param>
     public void SaveToFolder(string outDir)
@@ -101,7 +97,7 @@ public class Coalesced : IDisposable, IUnrealStreamable
     #region Helpers
 
     /// <summary>
-    /// Determines whether a coalesced streams in encrypted or not.
+    ///     Determines whether a coalesced streams in encrypted or not.
     /// </summary>
     /// <returns>True if the coalesced stream is encrypted, and false if it is not.</returns>
     private bool IsEncrypted()
@@ -121,7 +117,7 @@ public class Coalesced : IDisposable, IUnrealStreamable
     }
 
     #endregion
-
+    
     public void Dispose()
     {
         UStream.Dispose();

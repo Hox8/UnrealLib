@@ -1,5 +1,7 @@
 ﻿namespace UnLib.Enums;
 
+// This enum is broken?
+
 [Flags]
 public enum ObjectFlags : ulong
 {

@@ -21,7 +21,7 @@ public abstract class FObjectResource
 
     // Transient
     public int SerializedOffset { get; internal set; }
-    public int SerializedIndex { get; internal set; }
+    public int SerializedTableIndex { get; internal set; }
 
     internal FObjectResource? _outer { get; set; }
 

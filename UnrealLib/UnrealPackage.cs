@@ -49,7 +49,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
 
     // CONFIG
     // public LinkerLevel LinkerLevel = LinkerLevel.Normal;
-
+    
     public string FilePath { get; set; } = string.Empty;
     public Stream BaseStream => UStream.BaseStream;
 
@@ -83,8 +83,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
                 var import = new FObjectImport();
 
                 import.Serialize(UStream);
-                import.SerializedIndex = i;
-                import.SerializedOffset = i;
+                import.SerializedTableIndex = i;
 
                 // Link names
                 import.ObjectName._name = Names[import.ObjectName.Index];
@@ -104,8 +103,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
                 var export = new FObjectExport();
 
                 export.Serialize(UStream);
-                export.SerializedIndex = i;
-                export.SerializedOffset = i;
+                export.SerializedTableIndex = i;
 
                 // Link names
                 export.ObjectName._name = Names[export.ObjectName.Index];
@@ -237,18 +235,20 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
     public void ReplaceExportData(FObjectExport export, byte[] newData)
     {
         // @TODO: This method should script calculate length! (not memory size though)
+        UStream.IsSaving = true;
 
         export.SerialOffset = UStream.Length;
         export.SerialSize = newData.Length;
 
-        // Update serialized size and offset in-place since we aren't reconstructing the whole package
-        UStream.Position = export.SerializedOffset + 32;
-        UStream.Serialize(ref export.SerialSize);
-        UStream.Serialize(ref export.SerialOffset);
+        // Write the new export header
+        UStream.Position = export.SerializedOffset;
+        UStream.Serialize(ref export);
 
         // Paste replacement UObject data at EOF
         UStream.Position = UStream.Length;
         UStream.Write(newData);
+
+        UStream.IsSaving = false;
     }
 
     public FObjectExport? GetObjectAtOffset(int offset)
@@ -261,7 +261,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
     }
 
     #endregion
-
+    
     public void Dispose()
     {
         UStream.Dispose();
