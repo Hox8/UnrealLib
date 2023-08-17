@@ -1,8 +1,8 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
-using UnLib.Enums;
+using UnrealLib.Enums;
 
-namespace UnLib.Coalesced;
+namespace UnrealLib.Coalesced;
 
 public static class AES
 {
@@ -28,13 +28,13 @@ public static class AES
         aes.Padding = PaddingMode.Zeros;
 
         // If stream isn't a valid ECB block size (multiple of 16), pad its length to the next multiple
-        var remainder = unStream.Length % 16;
+        int remainder = unStream.Length % 16;
         if (remainder != 0) unStream.SetLength(unStream.Length + 16 - remainder);
 
         // Do de/encryption
         unStream.Position = 0;
         using var crypto = isDecrypting ? aes.CreateDecryptor() : aes.CreateEncryptor();
-        var result = crypto.TransformFinalBlock(unStream.ToArray(), 0, unStream.Length);
+        byte[]? result = crypto.TransformFinalBlock(unStream.ToArray(), 0, unStream.Length);
 
         // Save results back to stream
         unStream.SetLength(0);

@@ -1,9 +1,9 @@
 ﻿using System.Text;
-using UnLib.Enums;
-using UnLib.Enums.Textures;
-using UnLib.Interfaces;
+using UnrealLib.Enums;
+using UnrealLib.Enums.Textures;
+using UnrealLib.Interfaces;
 
-namespace UnLib;
+namespace UnrealLib;
 
 public sealed class UnrealStream : IDisposable
 {
@@ -27,9 +27,9 @@ public sealed class UnrealStream : IDisposable
         _writer = new BinaryWriter(memStream);
     }
 
-    public UnrealStream(string filePath, UnrealPackage? unPackage = null)
+    public UnrealStream(string filePath, FileMode openMode, UnrealPackage? unPackage = null)
     {
-        var fs = File.Open(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        var fs = File.Open(filePath, openMode, FileAccess.ReadWrite, FileShare.Read);
 
         _unPackage = unPackage;
         _reader = new BinaryReader(fs);
@@ -48,6 +48,13 @@ public sealed class UnrealStream : IDisposable
         _reader.BaseStream.Position = 0;
         _reader.Close();
         Dispose();
+    }
+
+    public void SaveTo(string filePath)
+    {
+        var fs = File.Create(filePath);
+        BaseStream.CopyTo(fs);
+        fs.Close();
     }
 
     #region Serializers
@@ -111,7 +118,7 @@ public sealed class UnrealStream : IDisposable
     {
         if (IsLoading)
         {
-            var length = _reader.ReadInt32();
+            int length = _reader.ReadInt32();
 
             if (length == 0)
             {
@@ -171,13 +178,13 @@ public sealed class UnrealStream : IDisposable
             length ??= _reader.ReadInt32();
             value = new List<int>((int)length);
 
-            for (var i = 0; i < length; i++) value.Add(_reader.ReadInt32());
+            for (int i = 0; i < length; i++) value.Add(_reader.ReadInt32());
         }
         else
         {
             if (length is null) _writer.Write(value.Count);
 
-            for (var i = 0; i < value.Capacity; i++) _writer.Write(value[i]);
+            for (int i = 0; i < value.Capacity; i++) _writer.Write(value[i]);
         }
     }
 
@@ -188,9 +195,9 @@ public sealed class UnrealStream : IDisposable
             length ??= _reader.ReadInt32();
             value = new List<string>((int)length);
 
-            for (var i = 0; i < length; i++)
+            for (int i = 0; i < length; i++)
             {
-                var item = string.Empty;
+                string item = string.Empty;
                 Serialize(ref item);
 
                 value.Add(item);
@@ -200,9 +207,9 @@ public sealed class UnrealStream : IDisposable
         {
             if (length is null) _writer.Write(value.Count);
 
-            for (var i = 0; i < value.Capacity; i++)
+            for (int i = 0; i < value.Capacity; i++)
             {
-                var item = value[i];
+                string item = value[i];
                 Serialize(ref item);
             }
         }
@@ -213,7 +220,7 @@ public sealed class UnrealStream : IDisposable
         if (IsLoading)
         {
             value = new List<T>(length ?? _reader.ReadInt32());
-            for (var i = 0; i < value.Capacity; i++)
+            for (int i = 0; i < value.Capacity; i++)
             {
                 T item = new();
                 item.Serialize(this);
@@ -225,7 +232,7 @@ public sealed class UnrealStream : IDisposable
         {
             if (length is null) _writer.Write(value.Count);
 
-            for (var i = 0; i < value.Count; i++) value[i].Serialize(this);
+            for (int i = 0; i < value.Count; i++) value[i].Serialize(this);
         }
     }
 
@@ -233,12 +240,12 @@ public sealed class UnrealStream : IDisposable
     {
         if (IsLoading)
         {
-            var capacity = length ?? _reader.ReadInt32();
+            int capacity = length ?? _reader.ReadInt32();
             value = new Dictionary<string, T>(capacity);
 
-            for (var i = 0; i < capacity; i++)
+            for (int i = 0; i < capacity; i++)
             {
-                var key = string.Empty;
+                string key = string.Empty;
                 T item = new();
 
                 Serialize(ref key);
@@ -253,7 +260,7 @@ public sealed class UnrealStream : IDisposable
 
             foreach (var section in value)
             {
-                var key = section.Key;
+                string key = section.Key;
                 var item = section.Value;
 
                 Serialize(ref key);
@@ -364,7 +371,7 @@ public sealed class UnrealStream : IDisposable
 
     public static bool IsPureAscii(string value)
     {
-        for (var i = 0; i < value.Length; i++)
+        for (int i = 0; i < value.Length; i++)
             if (value[i] > 127)
                 return false;
 

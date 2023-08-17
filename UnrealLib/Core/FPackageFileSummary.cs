@@ -1,7 +1,7 @@
-﻿using UnLib.Enums;
-using UnLib.Interfaces;
+﻿using UnrealLib.Enums;
+using UnrealLib.Interfaces;
 
-namespace UnLib.Core;
+namespace UnrealLib.Core;
 
 public class FPackageFileSummary : ISerializable
 {

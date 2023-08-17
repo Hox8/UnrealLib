@@ -1,6 +1,6 @@
-﻿using UnLib.Enums;
+﻿using UnrealLib.Enums;
 
-namespace UnLib;
+namespace UnrealLib;
 
 public static class Globals
 {
@@ -10,6 +10,8 @@ public static class Globals
     internal const string CoalescedKeyIB3 = "6nHmjd:hbWNf=9|UO2:?;K0y+gZL-jP5";
     internal const string CoalescedKeyIB2 = "|FK}S];v]!!cw@E4l-gMXa9yDPvRfF*B";
     internal const string CoalescedKeyVOTE = "DKksEKHkldF#(WDJ#FMS7jla5f(@J12|";
+
+    internal const string CoalescedHelperName = "ibhelper";
 
     public static string GameToString(Game game) => game switch
     {

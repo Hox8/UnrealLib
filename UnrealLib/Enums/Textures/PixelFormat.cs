@@ -1,4 +1,4 @@
-﻿namespace UnLib.Enums.Textures;
+﻿namespace UnrealLib.Enums.Textures;
 
 public enum PixelFormat
 {

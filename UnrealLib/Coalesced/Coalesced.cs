@@ -1,126 +1,216 @@
-﻿using UnLib.Enums;
-using UnLib.Interfaces;
+﻿#define WITH_FOLDER_SUPPORT     // Optional features useful for coalesced editors
 
-namespace UnLib.Coalesced;
+using UnrealLib.Enums;
 
-public class Coalesced : IDisposable, IUnrealStreamable
+namespace UnrealLib.Coalesced;
+
+// Persistent UnrealStream field was REMOVED. Not needed as all data is read into memory
+public class Coalesced
 {
+    public FileInfo? FileInfo;
     public Game Game;
-
+    public bool GameIsUnspecified = true;
+    
+    /*
+     * CoalescedSerializationOptions (or maybe just Ini):
+     * AllowComments            // If false, will remove full-line comments
+     * AllowCommentsInline      // If false, will remove trailing comments from properties
+     * DoPruning                // If true, will remove empty files and sections
+     * DoEncryption             // If true, will save encrypted coalesced files where applicable
+     * ForceUnicode             // If true, will force unicode strings even if ASCII-compatible
+     */
+    
     public Dictionary<string, Ini> Inis = new();
-    internal UnrealStream UStream;
+    public string ErrorContext = string.Empty;
+    
+    /// <summary>
+    /// Parameterless constructor supports delayed initialization
+    /// </summary>
+    public Coalesced() { }
 
-    public Coalesced(string filePath, Game game)
+    public Coalesced(string path, Game game = Game.Unknown) => Init(path, game);
+
+    public void Init(string path, Game game=Game.Unknown)
     {
-        FilePath = filePath;
+        FileInfo = new FileInfo(path);
+
+        if ((int)FileInfo.Attributes == -1)
+        {
+            // @ERROR: Passed path does not exist
+            ErrorContext = $"'{path}' does not exist!";
+            return;
+        }
+
         Game = game;
+        if (Game is not Game.Unknown) GameIsUnspecified = false;
+
+        // Read from Coalesced file
+        if ((FileInfo.Attributes & FileAttributes.Archive) != 0)
+        {
+            var ms = new MemoryStream();
+            using (var fs = File.OpenRead(path)) fs.CopyTo(ms);
+            
+            using var unStream = new UnrealStream(ms);
+            unStream.IsLoading = true;
+
+            if (TryDecrypt(unStream))
+            {
+                try
+                {
+                    unStream.Position = 0;
+                    unStream.Serialize(ref Inis);
+                }
+                catch
+                {
+                    ErrorContext = $"Failed to parse '{path}'!";
+                }
+            }
+            else ErrorContext = $"Failed to decrypt '{path}'!";
+
+            unStream.IsLoading = false;
+        }
+        
+#if WITH_FOLDER_SUPPORT
+        // Read from Coalesced folder
+        else if ((FileInfo.Attributes & FileAttributes.Directory) != 0)
+        {
+            string helperPath = Path.Combine(path, Globals.CoalescedHelperName);
+            if (!File.Exists(helperPath))
+            {
+                // @ERROR: Coalesced helper file not found
+                ErrorContext = $"'{Globals.CoalescedHelperName}' file was not found!";
+                return;
+            }
+
+            // Parse the helper file
+            using (var fs = File.OpenRead(helperPath))
+            {
+                // @ERROR: Invalid / tampered helper file
+                if (fs.Length != 1)
+                {
+                    ErrorContext = $"Invalid '{Globals.CoalescedHelperName}' file!";
+                    return;
+                }
+
+                Game = (Game)fs.ReadByte();
+                if (Game is not (Game.IB1 or Game.IB2 or Game.IB3 or Game.Vote))
+                {
+                    ErrorContext = $"Invalid '{Globals.CoalescedHelperName}' file!";
+                    return;
+                }
+            }
+
+            foreach (string file in Directory.GetFiles(path, "*.*", SearchOption.AllDirectories))
+            {
+                if (Path.GetExtension(file).Length != 4) continue;
+                Inis.Add($"..\\..{file[path.Length..]}", new Ini(file));
+            }
+        }
+#endif
     }
 
-    /// Whether to encrypt the coalesced data using the appropriate game key when saved (IB1 ignores this setting).
-    public bool DoSaveEncryption { get; set; } = true;
-
-    /// Whether to force Unicode encoding for strings, even when ASCII is sufficient.
-    public bool ForceUnicode { get; set; } = false;
-    public bool InitFailed { get; set; }
-    public bool Modified { get; set; } = false;
-    public string FilePath { get; set; }
-    public Stream BaseStream => UStream.BaseStream;
-    public int Length => UStream.Length;
-
-    public void Write(byte[] value)
+    public void Save(string path="")
     {
-        UStream.Write(value);
+        if (path.Length != 0) FileInfo = new FileInfo(path);
+
+        string outPath = FileInfo.FullName;
+
+        // Saving to a file
+        if (Path.HasExtension(outPath))
+        {
+            using var unStream = new UnrealStream(outPath, FileMode.Create);
+
+            unStream.IsSaving = true;
+
+            unStream.Serialize(ref Inis);
+            if (Game is not Game.IB1)
+            {
+                AES.CryptoECB(unStream, Game, false);
+            }
+        }
+
+#if WITH_FOLDER_SUPPORT
+        // Saving to a folder
+        else
+        {
+            foreach (var ini in Inis)
+            {
+                string iniPath = Path.Combine(outPath, ini.Key[6..]);
+                
+                Directory.CreateDirectory(Path.GetDirectoryName(iniPath));
+                using var sw = new StreamWriter(iniPath);
+                
+                foreach (var section in ini.Value.Sections)
+                {
+                    // Write section header
+                    sw.WriteLine($"[{section.Key}]");
+                
+                    // Write section props
+                    foreach (var prop in section.Value.Properties)
+                    {
+                        sw.WriteLine(prop.ToString());
+                    }
+                }
+            }
+
+            string helperPath = Path.Combine(outPath, Globals.CoalescedHelperName);
+            if (File.Exists(helperPath)) File.Delete(helperPath);
+            
+            using var helper = File.Create(helperPath);
+            helper.WriteByte((byte)Game);
+            File.SetAttributes(helper.Name, FileAttributes.Hidden);
+        }
+#endif
     }
 
-    public void Init()
-    {
-        UStream = new UnrealStream(FilePath);
-        UStream.IsLoading = true;
-
-        if (TryDecrypt()) Serialize(UStream);
-        else InitFailed = true;
-
-        UStream.IsLoading = false;
-    }
-
-    /// <summary>
-    /// Re-serializes, encrypts, and saves the coalesced back to its original filepath.
-    /// </summary>
-    public void Save()
-    {
-        if (InitFailed) return;
-
-        UStream.ForceUnicode = ForceUnicode;
-        UStream.SetLength(0);
-
-        UStream.IsSaving = true;
-        Serialize(UStream);
-
-        if (DoSaveEncryption && Game != Game.IB1) AES.CryptoECB(UStream, Game, false);
-        UStream.IsSaving = false;
-
-        BaseStream.Position = 0;
-
-        // UStream.Close();
-        // Dispose();
-    }
-
-    /// <summary>
-    ///     If coalesced stream is encrypted, try and decrypt it before deserialization.
-    /// </summary>
-    /// <returns>True if resulting ini stream is unencrypted (ready for use), false otherwise.</returns>
-    private bool TryDecrypt()
-    {
-        if (!IsEncrypted()) return true;
-
-        if (Game is Game.IB1) return false;
-        AES.CryptoECB(UStream, Game, true);
-
-        return !IsEncrypted();
-    }
-
-    // @TODO: A static serializer would work well here. Probably something to think about moving forward.
-    /// <summary>
-    ///     Used to split and save the coalesced to PC-equivalent ini files on disk. STUB.
-    /// </summary>
-    /// <param name="outDir">The output folder path to save the ini files to.</param>
-    public void SaveToFolder(string outDir)
-    {
-    }
-
-    public void Serialize(UnrealStream UStream)
-    {
-        UStream.Position = 0;
-        UStream.Serialize(ref Inis);
-    }
-
-    #region Helpers
-
-    /// <summary>
-    ///     Determines whether a coalesced streams in encrypted or not.
-    /// </summary>
-    /// <returns>True if the coalesced stream is encrypted, and false if it is not.</returns>
-    private bool IsEncrypted()
+    // Assumes IsLoading is true...
+    private static bool IsEncrypted(UnrealStream unStream)
     {
         // This takes advantage of the fact that all coalesced files start with an int32 representing ini count.
         // We can safely assume that the last two bytes of the int32 will always be 0 in a valid coalesced, as
         // they will be unrealistic values - no sane coalesced file will have over 65k ini files.
-        UStream.Position = 2;
+        unStream.Position = 2;
 
         byte a = 0;
         byte b = 0;
 
-        UStream.Serialize(ref a);
-        UStream.Serialize(ref b);
+        unStream.Serialize(ref a);
+        unStream.Serialize(ref b);
 
         return a != 0 || b != 0;
     }
 
-    #endregion
-    
-    public void Dispose()
+    private bool TryDecrypt(UnrealStream unStream)
     {
-        UStream.Dispose();
-        GC.SuppressFinalize(this);
+        // IB1 is the only game not to use encryption
+        if (!IsEncrypted(unStream))
+        {
+            Game = Game.IB1;
+            return true;
+        }
+        
+#if WITH_FOLDER_SUPPORT
+        // Test against each game with encryption (IB2, IB3, VOTE)
+        if (GameIsUnspecified)
+        {
+            Game = Game.IB2;
+            while (Game <= Game.IB3)
+            {
+                AES.CryptoECB(unStream, Game, true);
+                if (!IsEncrypted(unStream)) return true;
+                Game = (Game)((byte)Game << 1);
+            }
+
+            Game = Game.Unknown;
+        }
+#endif
+        else
+        {
+            AES.CryptoECB(unStream, Game, true);
+            if (!IsEncrypted(unStream)) return true;
+        }
+
+        // Decryption failed
+        return false;
     }
 }

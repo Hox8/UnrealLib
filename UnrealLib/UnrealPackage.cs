@@ -1,7 +1,7 @@
-﻿using UnLib.Core;
-using UnLib.Interfaces;
+﻿using UnrealLib.Core;
+using UnrealLib.Interfaces;
 
-namespace UnLib;
+namespace UnrealLib;
 
 public enum LinkerLevel
 {
@@ -13,14 +13,15 @@ public enum LinkerLevel
     High = 1
 }
 
+// @TODO: This class needs a tidy-up / rewrite like I did for Coalesced
 public class UnrealPackage : IDisposable, IUnrealStreamable
 {
-    internal List<FObjectExport> Exports;
-    internal List<FObjectImport> Imports;
-    internal List<FNameEntry> Names;
-    // protected List<List<int>> DependsMap;
-
     internal FPackageFileSummary Summary;
+    internal List<FNameEntry> Names;
+    internal List<FObjectImport> Imports;
+    internal List<FObjectExport> Exports;
+    // protected List<List<int>> DependsMap;
+    
     internal UnrealStream UStream;
 
     public UnrealPackage(MemoryStream memStream)
@@ -56,7 +57,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
     public void Init()
     {
         // If using a filestream, open a stream now.
-        if (FilePath.Length > 0) UStream = new UnrealStream(FilePath);
+        if (FilePath.Length > 0) UStream = new UnrealStream(FilePath, FileMode.Open);
         UStream.IsLoading = true;
 
         try
@@ -66,7 +67,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
 
             // Read names
             Names = new List<FNameEntry>(Summary.NameCount);
-            for (var i = 0; i < Summary.NameCount; i++)
+            for (int i = 0; i < Summary.NameCount; i++)
             {
                 var name = new FNameEntry();
 
@@ -78,7 +79,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
 
             // Read and link Imports
             Imports = new List<FObjectImport>(Summary.ImportCount);
-            for (var i = 0; i < Summary.ImportCount; i++)
+            for (int i = 0; i < Summary.ImportCount; i++)
             {
                 var import = new FObjectImport();
 
@@ -98,7 +99,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
 
             // Read and link Exports
             Exports = new List<FObjectExport>(Summary.ExportCount);
-            for (var i = 0; i < Summary.ExportCount; i++)
+            for (int i = 0; i < Summary.ExportCount; i++)
             {
                 var export = new FObjectExport();
 
@@ -117,13 +118,13 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
             // UStream.Serialize(ref DependsMap);   // DependsMaps is always empty for cooked console packages
 
             // Link Imports
-            for (var i = 0; i < Summary.ImportCount; i++) Imports[i].Link(this);
+            for (int i = 0; i < Summary.ImportCount; i++) Imports[i].Link(this);
 
             // Link Exports
-            for (var i = 0; i < Summary.ExportCount; i++) Exports[i].Link(this);
+            for (int i = 0; i < Summary.ExportCount; i++) Exports[i].Link(this);
         }
         // If any errors occurred during serializations, catch them here and set a flag.
-        catch (Exception)
+        catch
         {
             InitFailed = true;
         }
@@ -141,7 +142,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
 
     private FName? SearchNames(string searchTerm, int instance)
     {
-        for (var i = 0; i < Names.Count; i++)
+        for (int i = 0; i < Names.Count; i++)
             if (string.Equals(Names[i].Name, searchTerm, StringComparison.OrdinalIgnoreCase))
             {
                 if (Names[i].HasPositiveMinInstance()) instance++;
@@ -173,11 +174,11 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
         // Is the first pass yielded no results, perform a second pass if the searchTerm contains an instance
         if (result is null)
         {
-            var instanceIdx = searchTerm.LastIndexOf('_');
+            int instanceIdx = searchTerm.LastIndexOf('_');
             if (instanceIdx != -1)
             {
-                var instanceStr = searchTerm[(instanceIdx + 1)..];
-                if (int.TryParse(instanceStr, out var parsed)) result = SearchNames(searchTerm[..instanceIdx], parsed);
+                string? instanceStr = searchTerm[(instanceIdx + 1)..];
+                if (int.TryParse(instanceStr, out int parsed)) result = SearchNames(searchTerm[..instanceIdx], parsed);
             }
         }
 
@@ -194,7 +195,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
     {
         // Convert leaf name into FName.
         // If name does not exist in the name table (null FName), return null.
-        var delimIdx = searchTerm.LastIndexOf('.');
+        int delimIdx = searchTerm.LastIndexOf('.');
         string? outerNameString = null;
         string leafNameString;
 
@@ -253,7 +254,7 @@ public class UnrealPackage : IDisposable, IUnrealStreamable
 
     public FObjectExport? GetObjectAtOffset(int offset)
     {
-        for (var i = 0; i < Exports.Count; i++)
+        for (int i = 0; i < Exports.Count; i++)
             if (Exports[i].SerialOffset + Exports[i].SerialSize >= offset)
                 return Exports[i];
 

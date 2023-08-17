@@ -1,7 +1,7 @@
-﻿using UnLib.Enums.Textures;
-using UnLib.Interfaces;
+﻿using UnrealLib.Enums.Textures;
+using UnrealLib.Interfaces;
 
-namespace UnLib.Core;
+namespace UnrealLib.Core;
 
 public class FTextureType : ISerializable
 {

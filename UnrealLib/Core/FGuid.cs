@@ -1,6 +1,6 @@
-﻿using UnLib.Interfaces;
+﻿using UnrealLib.Interfaces;
 
-namespace UnLib.Core;
+namespace UnrealLib.Core;
 
 public class FGuid : ISerializable
 {
