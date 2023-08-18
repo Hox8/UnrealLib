@@ -34,10 +34,21 @@ public static class AES
         // Do de/encryption
         unStream.Position = 0;
         using var crypto = isDecrypting ? aes.CreateDecryptor() : aes.CreateEncryptor();
-        byte[]? result = crypto.TransformFinalBlock(unStream.ToArray(), 0, unStream.Length);
+        byte[] result = crypto.TransformFinalBlock(unStream.ToArray(), 0, unStream.Length);
 
         // Save results back to stream
         unStream.SetLength(0);
         unStream.Write(result, 0, result.Length);
+    }
+    
+    public static bool TryDecryptBlock(byte[] block, Game game)
+    {
+        using var aes = Aes.Create();
+        aes.Mode = CipherMode.ECB;
+        aes.Key = Encoding.ASCII.GetBytes(GetGameKey(game));
+        aes.Padding = PaddingMode.Zeros;
+
+        block = aes.CreateDecryptor().TransformFinalBlock(block, 0, 16);
+        return block[2] == 0 && block[3] == 0;
     }
 }

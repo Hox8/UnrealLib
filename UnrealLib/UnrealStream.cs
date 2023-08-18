@@ -27,9 +27,9 @@ public sealed class UnrealStream : IDisposable
         _writer = new BinaryWriter(memStream);
     }
 
-    public UnrealStream(string filePath, FileMode openMode, UnrealPackage? unPackage = null)
+    public UnrealStream(string filePath, FileMode openMode=FileMode.Open, FileAccess access=FileAccess.ReadWrite, UnrealPackage? unPackage = null)
     {
-        var fs = File.Open(filePath, openMode, FileAccess.ReadWrite, FileShare.Read);
+        var fs = File.Open(filePath, openMode, access, FileShare.Read);
 
         _unPackage = unPackage;
         _reader = new BinaryReader(fs);

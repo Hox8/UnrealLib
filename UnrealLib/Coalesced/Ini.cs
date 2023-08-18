@@ -53,7 +53,7 @@ public class Ini : ISerializable
     {
         var curSection = new Section();
         
-        // Metadata section
+        // Global 'section-less' properties
         Sections = new Dictionary<string, Section>
         {
             { string.Empty, curSection }
@@ -69,7 +69,8 @@ public class Ini : ISerializable
         
         for (int i = 0; i < lines.Length; i++)
         {
-            string trimmed = lines[i].Trim(); 
+            // Trim whitespace and unescape newlines
+            string trimmed = lines[i].Trim().Replace("\\n", "\n"); 
             
             if (trimmed.Length == 0) continue;
             if (trimmed[0] == '[' && trimmed[^1] == ']')
@@ -81,11 +82,11 @@ public class Ini : ISerializable
                 continue;
             }
             
-            // Do property processing here
+            // @TODO Do property processing here e.g. comment removal
             curSection.UpdateProperty(trimmed);
         }
 
-        // Remove the section containing metadata if not needed
+        // Remove global properties if we don't want them
         if (!collectMetadata) Sections.Remove(string.Empty);
     }
 
