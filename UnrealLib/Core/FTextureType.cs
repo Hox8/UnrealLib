@@ -1,26 +1,35 @@
-﻿using UnrealLib.Enums.Textures;
+﻿using System.Collections.Generic;
+using UnrealLib.Enums.Textures;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
 
-public class FTextureType : ISerializable
+class FTextureAllocations : ISerializable
 {
-    private int SizeX;
-    private int SizeY;
-    private int NumMips;
-    private PixelFormat Format;
-    private TextureCreateFlags TexCreateFlags;
-    private List<int> ExportIndicies;
-
-    public void Serialize(UnrealStream UStream)
+    class FTextureType : ISerializable
     {
-        UStream.Serialize(ref SizeX);
-        UStream.Serialize(ref SizeY);
-        UStream.Serialize(ref NumMips);
-        UStream.Serialize(ref Format);
-        UStream.Serialize(ref TexCreateFlags);
-        UStream.Serialize(ref ExportIndicies);
+        private int SizeX;
+        private int SizeY;
+        private int NumMips;
+        private PixelFormat Format;
+        private TextureCreateFlags TexCreateFlags;
+        private List<int> ExportIndicies;
+
+        public void Serialize(UnrealStream stream)
+        {
+            stream.Serialize(ref SizeX);
+            stream.Serialize(ref SizeY);
+            stream.Serialize(ref NumMips);
+            stream.Serialize(ref Format);
+            stream.Serialize(ref TexCreateFlags);
+            stream.Serialize(ref ExportIndicies);
+        }
     }
-    
-    // @TODO: ToString() override
+
+    List<FTextureType> TextureTypes;
+
+    public void Serialize(UnrealStream stream)
+    {
+        stream.Serialize(ref TextureTypes);
+    }
 }

@@ -1,26 +1,45 @@
-﻿namespace UnrealLib.Enums;
+﻿using System;
 
+namespace UnrealLib.Enums;
+
+/// <summary>
+/// Flags controlling [de]compression.
+/// </summary>
 [Flags]
 public enum CompressionFlags : uint
 {
-    /// No compression
+    /// <summary>
+    /// Indicates no compression.
+    /// </summary>
     None = 0,
 
-    /// Indicates ZLib compression
-    ZLIB = 1 << 0,
+    /// <summary>
+    /// Indicates ZLib compression.
+    /// </summary>
+    ZLib = 1 << 0,
 
-    /// Indicates LZO compression
+    /// <summary>
+    /// Indicates LZO compression.
+    /// </summary>
     LZO = 1 << 1,
 
-    /// Indicates LZX compression
+    /// <summary>
+    /// Indicates LZX compression.
+    /// </summary>
     LZX = 1 << 2,
 
-    /// Indicates the compression algorithm should favor smaller output size over speed
+    /// <summary>
+    /// Indicates the compression algorithm should favor smaller output size over speed.
+    /// </summary>
     BiasMemory = 1 << 4,
 
-    /// Indicates the compression algorithm should favor faster speed in favor of output size
+    /// <summary>
+    /// Indicates the compression algorithm should favor faster speed in favor of output size.
+    /// </summary>
     BiasSpeed = 1 << 5,
 
-    /// Indicates decompression should not happen on the PS3's SPUs
+    /// <summary>
+    /// Indicates decompression should not happen on PS3 SPUs.
+    /// </summary>
     ForcePPUDecompressZLib = 1 << 7
 }

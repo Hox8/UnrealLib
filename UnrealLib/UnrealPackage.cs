@@ -1,271 +1,228 @@
-﻿using UnrealLib.Core;
-using UnrealLib.Interfaces;
+﻿using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using UnrealLib.Core;
 
 namespace UnrealLib;
 
-public enum LinkerLevel
+public class UnrealPackage : UnrealArchive
 {
-    /// The minimum amount of linkage. Incurs minimal performance penalty.
-    /// Spends extra processing time linking UObjects together.
-    Normal = 0,
+    public int EngineVersion => Summary.EngineVersion;
+    public int LicenseeVersion => Summary.LicenseeVersion;
 
-    /// Stub. Will influence whether UObject data is copied and linked. Very expensive!
-    High = 1
-}
+    // Private fields
+    private UnrealStream Stream;
 
-// @TODO: This class needs a tidy-up / rewrite like I did for Coalesced
-public class UnrealPackage : IDisposable, IUnrealStreamable
-{
     internal FPackageFileSummary Summary;
     internal List<FNameEntry> Names;
     internal List<FObjectImport> Imports;
     internal List<FObjectExport> Exports;
-    // protected List<List<int>> DependsMap;
-    
-    internal UnrealStream UStream;
+    // private List<List<int>> Depends;
 
-    public UnrealPackage(MemoryStream memStream)
+    #region Constructors
+
+    /// <summary>
+    /// Parameterless constructor. Use for delayed initialization.
+    /// </summary>
+    public UnrealPackage() { }
+
+    /// <summary>
+    /// Constructs an <see cref="UnrealPackage"/> and initializes it from the passed filepath.
+    /// </summary>
+    public UnrealPackage(string filePath) => Open(filePath);
+
+    #endregion
+
+    #region IO and initialization methods
+
+    public sealed override bool Open(string? path = null)
     {
-        UStream = new UnrealStream(memStream, this);
-        // Init();
-    }
+        // If this UPK has an already-open stream, we should dispose of it before re-assigning it
+        Stream.Dispose();
 
-    public UnrealPackage(string filePath)
-    {
-        FilePath = filePath;
-
-        // Delay initializing UnrealStream
-    }
-
-    public int Version => Summary.EngineVersion;
-
-    public int Length => UStream.Length;
-    public bool InitFailed { get; set; }
-    public bool Modified { get; set; } = false;
-
-    public void Write(byte[] value)
-    {
-        UStream.Write(value);
-    }
-
-    // CONFIG
-    // public LinkerLevel LinkerLevel = LinkerLevel.Normal;
-    
-    public string FilePath { get; set; } = string.Empty;
-    public Stream BaseStream => UStream.BaseStream;
-
-    public void Init()
-    {
-        // If using a filestream, open a stream now.
-        if (FilePath.Length > 0) UStream = new UnrealStream(FilePath, FileMode.Open);
-        UStream.IsLoading = true;
-
-        try
+        if (path is not null)
         {
-            UStream.Position = 0;
-            UStream.Serialize(ref Summary);
-
-            // Read names
-            Names = new List<FNameEntry>(Summary.NameCount);
-            for (int i = 0; i < Summary.NameCount; i++)
-            {
-                var name = new FNameEntry();
-
-                name.Serialize(UStream);
-                name.SerializedIndex = i;
-
-                Names.Add(name);
-            }
-
-            // Read and link Imports
-            Imports = new List<FObjectImport>(Summary.ImportCount);
-            for (int i = 0; i < Summary.ImportCount; i++)
-            {
-                var import = new FObjectImport();
-
-                import.Serialize(UStream);
-                import.SerializedTableIndex = i;
-
-                // Link names
-                import.ObjectName._name = Names[import.ObjectName.Index];
-                import.ClassPackage._name = Names[import.ClassPackage.Index];
-                import.ClassName._name = Names[import.ClassName.Index];
-
-                // Add import as a direct referencer to its object name
-                import.ObjectName._name.Imports.Add(import);
-
-                Imports.Add(import);
-            }
-
-            // Read and link Exports
-            Exports = new List<FObjectExport>(Summary.ExportCount);
-            for (int i = 0; i < Summary.ExportCount; i++)
-            {
-                var export = new FObjectExport();
-
-                export.Serialize(UStream);
-                export.SerializedTableIndex = i;
-
-                // Link names
-                export.ObjectName._name = Names[export.ObjectName.Index];
-
-                // Add export as a direct referencer to its object name
-                export.ObjectName._name.Exports.Add(export);
-
-                Exports.Add(export);
-            }
-
-            // UStream.Serialize(ref DependsMap);   // DependsMaps is always empty for cooked console packages
-
-            // Link Imports
-            for (int i = 0; i < Summary.ImportCount; i++) Imports[i].Link(this);
-
-            // Link Exports
-            for (int i = 0; i < Summary.ExportCount; i++) Exports[i].Link(this);
-        }
-        // If any errors occurred during serializations, catch them here and set a flag.
-        catch
-        {
-            InitFailed = true;
+            InitPathInfo(path);
         }
 
-        InitFailed = false;
-        UStream.IsLoading = false;
+        Stream = new UnrealStream(QualifiedPath);
+
+        return Init();
     }
 
-    public void Save()
+    public sealed override bool Save(string? path = null)
     {
-        BaseStream.Position = 0;
+        if (path is not null) throw new NotImplementedException();
+
+        Stream.StartSaving();
+
+        Stream.Position = 0;
+        Stream.Serialize(ref Summary);
+        Stream.Serialize(ref Names, Summary.NameCount);
+        Stream.Serialize(ref Imports, Summary.ImportCount);
+        Stream.Serialize(ref Exports, Summary.ExportCount);
+
+        // Depends map, thumbnail, guids etc.
+        // UObject data
+
+        return false;
     }
 
-    #region UPK Helpers
-
-    private FName? SearchNames(string searchTerm, int instance)
+    public sealed override bool Init()
     {
-        for (int i = 0; i < Names.Count; i++)
-            if (string.Equals(Names[i].Name, searchTerm, StringComparison.OrdinalIgnoreCase))
-            {
-                if (Names[i].HasPositiveMinInstance()) instance++;
+        Stream.Position = 0;
+        Stream.Serialize(ref Summary);
+        Stream.Serialize(ref Names, Summary.NameCount);
+        Stream.Serialize(ref Imports, Summary.ImportCount);
+        Stream.Serialize(ref Exports, Summary.ExportCount);
 
-                return new FName
-                {
-                    Index = i,
-                    Instance = instance,
-                    _name = Names[i]
-                };
-            }
+        // Link imports
+        var imports = CollectionsMarshal.AsSpan(Imports);
+        for (int i = 0; i < imports.Length; i++)
+        {
+            imports[i].Link(this, i);
+        }
 
-        return null;
+        // Link exports
+        var exports = CollectionsMarshal.AsSpan(Exports);
+        for (int i = 0; i < exports.Length; i++)
+        {
+            exports[i].Link(this, i);
+        }
+
+        Stream.Dispose();
+        return true;
     }
 
     #endregion
 
-    #region UPK Methods
+    #region UnrealPackage Methods
 
-    // This method is not infallible, as a very small percentage of names are not returned.
-    // It is however still an improvement over what the previous version's implementation.
-    public FName? FindName(string searchTerm)
+    /// <summary>
+    /// Attempts to locate an <see cref="FName"/> with a matching string name.
+    /// </summary>
+    public bool FindName(string searchTerm, out FName? name)
     {
         // Because a small percentage of names have instances 'baked' into the name string itself,
         // We need to iterate the name table twice in order to correctly pick them up.
+        name = SearchNames(searchTerm, 0);
 
-        var result = SearchNames(searchTerm, 0);
-
-        // Is the first pass yielded no results, perform a second pass if the searchTerm contains an instance
-        if (result is null)
+        // If the first pass yielded no results, try again by interpreting the name instance
+        if (name is null)
         {
-            int instanceIdx = searchTerm.LastIndexOf('_');
-            if (instanceIdx != -1)
-            {
-                string? instanceStr = searchTerm[(instanceIdx + 1)..];
-                if (int.TryParse(instanceStr, out int parsed)) result = SearchNames(searchTerm[..instanceIdx], parsed);
-            }
+            (searchTerm, int instance) = SplitInstance(searchTerm);
+            name = SearchNames(searchTerm, instance);
         }
 
-        return result;
+        return name is not null;
     }
 
     /// <summary>
-    ///     @TODO: Does not support objects where instance is higher than what UEE displays.
-    ///     @TODO: Allow for "imprecise" object searching. Currently object path must be exact match.
+    /// Attempts to locate an <see cref="FObjectExport"/> with a matching qualified name.
     /// </summary>
-    /// <param name="searchTerm"></param>
-    /// <returns></returns>
+    /// <param name="searchTerm">The fully-qualified name to search for.</param>
     public FObjectResource? FindObject(string searchTerm)
     {
-        // Convert leaf name into FName.
-        // If name does not exist in the name table (null FName), return null.
-        int delimIdx = searchTerm.LastIndexOf('.');
-        string? outerNameString = null;
-        string leafNameString;
+        // Split searchTerm into a local 'leaf' name and full parent qualifier
+        var (parentString, leafString) = SeparateLeafName(searchTerm);
 
-        if (delimIdx != -1)
-        {
-            outerNameString = searchTerm[..delimIdx];
-            leafNameString = searchTerm[(delimIdx + 1)..];
-        }
-        else
-        {
-            leafNameString = searchTerm;
-        }
+        // Look for the leaf name in the name table. Return null if not found
+        if (!FindName(leafString, out var leaf)) return null;
 
-        var leaf = FindName(leafNameString);
-        if (leaf is null) return null;
-
-        // Iterate leaf name entry's import 'referencees' for a match
-        foreach (var import in leaf._name.Imports)
+        // Look for a match in the leaf name's Import referencees
+        foreach (var import in leaf.Name.Imports)
         {
             if (import.ObjectName != leaf) continue;
 
-            if (string.Equals(import._outer?.ToString(), outerNameString, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(import.Outer?.ToString(), parentString, StringComparison.OrdinalIgnoreCase))
                 return import;
         }
 
-        // Iterate leaf name entry's export 'referencees' for a match
-        foreach (var export in leaf._name.Exports)
+        // Look for a match in the leaf name's Export referencees
+        foreach (var export in leaf.Name.Exports)
         {
             if (export.ObjectName != leaf) continue;
 
-            if (string.Equals(export._outer?.ToString(), outerNameString, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(export.Outer?.ToString(), parentString, StringComparison.OrdinalIgnoreCase))
                 return export;
         }
 
         return null;
     }
 
-    public void ReplaceExportData(FObjectExport export, byte[] newData)
-    {
-        // @TODO: This method should script calculate length! (not memory size though)
-        UStream.IsSaving = true;
-
-        export.SerialOffset = UStream.Length;
-        export.SerialSize = newData.Length;
-
-        // Write the new export header
-        UStream.Position = export.SerializedOffset;
-        UStream.Serialize(ref export);
-
-        // Paste replacement UObject data at EOF
-        UStream.Position = UStream.Length;
-        UStream.Write(newData);
-
-        UStream.IsSaving = false;
-    }
-
+    /// <summary>
+    /// Attempts to find an <see cref="FObjectExport"/> at the specified file offset.
+    /// </summary>
     public FObjectExport? GetObjectAtOffset(int offset)
     {
-        for (int i = 0; i < Exports.Count; i++)
-            if (Exports[i].SerialOffset + Exports[i].SerialSize >= offset)
-                return Exports[i];
+        var span = CollectionsMarshal.AsSpan(Exports);
+        for (int i = 0; i < span.Length; i++)
+        {
+            if (span[i].SerialOffset + span[i].SerialSize >= offset) return span[i];
+        }
 
         return null;
     }
 
     #endregion
-    
-    public void Dispose()
+
+    #region Utilities
+
+    /// <summary>
+    /// Utility method used by <see cref="FindName"/>. Tries to split a string name from its instance suffix.
+    /// </summary>
+    private static (string name, int instance) SplitInstance(string searchTerm)
     {
-        UStream.Dispose();
-        GC.SuppressFinalize(this);
+        int instanceIdx = searchTerm.LastIndexOf('_');
+        if (instanceIdx != -1)
+        {
+            if (int.TryParse(searchTerm[(instanceIdx + 1)..], out int instance))
+            {
+                return (searchTerm[(instanceIdx + 1)..], instance);
+            }
+        }
+
+        return (searchTerm, 0);
     }
+
+    /// <summary>
+    /// Utility method used by <see cref="FindName"/>.
+    /// Searches <see cref="Names"/> for the first occurrence of an <see cref="FNameEntry"/> with a matching name.
+    /// </summary>
+    private FName? SearchNames(string searchTerm, int instance)
+    {
+        var span = CollectionsMarshal.AsSpan(Names);
+        for (int i = 0; i < span.Length; i++)
+        {
+            if (span[i].Name.Equals(searchTerm, StringComparison.OrdinalIgnoreCase))
+            {
+                if (span[i].HasPositiveMinInstance) instance++;
+
+                return new FName
+                {
+                    Index = i,
+                    Instance = instance,
+                    Name = span[i]
+                };
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Utility method used by <see cref="FindObject"/>. Separates an object name from its fully-qualified name.
+    /// </summary>
+    private static (string parent, string leaf) SeparateLeafName(string qualifiedObjectName)
+    {
+        int delimiterIndex = qualifiedObjectName.LastIndexOf('.');
+        if (delimiterIndex != -1)
+        {
+            return (qualifiedObjectName[..delimiterIndex], qualifiedObjectName[(delimiterIndex + 1)..]);
+        }
+
+        return (string.Empty, qualifiedObjectName);
+    }
+
+    #endregion
 }

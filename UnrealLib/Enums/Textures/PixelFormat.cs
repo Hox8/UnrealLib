@@ -1,8 +1,11 @@
 ﻿namespace UnrealLib.Enums.Textures;
 
-public enum PixelFormat
+/// <summary>
+/// Flags describing texture format.
+/// </summary>
+public enum PixelFormat : uint
 {
-    Unknown,
+    Unknown = 0,
     A32B32G32R32F,
     A8R8G8B8,
     G8,
@@ -12,22 +15,11 @@ public enum PixelFormat
     DXT5,
     UYVY,
     FloatRGB,
-
-    /// An RGB FP format with platform-specific implementation, for use with render targets
     FloatRGBA,
-
-    /// An RGBA FP format with platform-specific implementation, for use with render targets
     DepthStencil,
-
-    /// A depth+stencil format with platform-specific implementation, for use with render targets
     ShadowDepth,
-
-    /// A depth format with platform-specific implementation, for use with render targets
     FilteredShadowDepth,
-
-    /// A depth format with platform-specific implementation, that can be filtered by hardware
     R32F,
-    
     G16R16,
     G16R16F,
     G16R16F_FILTER,
@@ -39,5 +31,15 @@ public enum PixelFormat
     R16F_FILTER,
     BC5,
     V8U8,
-    A1
+    A1,
+
+    /// <remarks>
+    /// Not applicable to IB1.
+    /// </remarks>
+    FloatR11G11B10,
+
+    /// <remarks>
+    /// Not applicable to IB1.
+    /// </remarks>
+    A4R4G4B4
 }

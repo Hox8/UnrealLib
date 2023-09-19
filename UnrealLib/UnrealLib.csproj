@@ -2,14 +2,24 @@
 
     <PropertyGroup>
         <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
+        <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <LangVersion>preview</LangVersion>
-        <IsPackable>false</IsPackable>
+        <LangVersion>12</LangVersion>
+		<IsAotCompatible>true</IsAotCompatible>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<Features>InterceptorsPreview</Features>
     </PropertyGroup>
-
+    
+    <PropertyGroup Condition="'${OS}' == 'OSX' Or '${OS}' == 'Unix'">
+        <DefineConstants>UNIX</DefineConstants>
+    </PropertyGroup>
+    
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
         <DebugType>none</DebugType>
+    </PropertyGroup>
+    
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <DebugType>full</DebugType>
     </PropertyGroup>
 
 </Project>

@@ -1,4 +1,6 @@
-﻿namespace UnrealLib.Enums;
+﻿using System;
+
+namespace UnrealLib.Enums;
 
 [Flags]
 public enum Game : byte

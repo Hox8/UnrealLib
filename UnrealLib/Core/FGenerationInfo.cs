@@ -1,19 +1,8 @@
-﻿using UnrealLib.Interfaces;
+﻿namespace UnrealLib.Core;
 
-namespace UnrealLib.Core;
-
-public class FGenerationInfo : ISerializable
+public struct FGenerationInfo
 {
-    private int ExportCount;
-    private int NameCount;
-    private int NetObjectCount;
-
-    public void Serialize(UnrealStream UStream)
-    {
-        UStream.Serialize(ref ExportCount);
-        UStream.Serialize(ref NameCount);
-        UStream.Serialize(ref NetObjectCount);
-    }
+    private int ExportCount, NameCount, NetObjectCount;
 
     public override string ToString() => $"{ExportCount}/{NameCount}/{NetObjectCount}";
 }

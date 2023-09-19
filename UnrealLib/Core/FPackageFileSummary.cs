@@ -1,13 +1,15 @@
-﻿using UnrealLib.Enums;
+﻿using System;
+using System.Collections.Generic;
+using UnrealLib.Enums;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
 
 public class FPackageFileSummary : ISerializable
 {
-    uint Tag;
+    internal uint Tag;
     internal short EngineVersion;
-    private short LicenseeVersion;
+    internal short LicenseeVersion;
     private int TotalHeaderSize;
     private string FolderName;
     private PackageFlags PackageFlags;
@@ -38,11 +40,11 @@ public class FPackageFileSummary : ISerializable
 
     private List<string> AdditionalCookedPackages;
 
-    private List<FTextureType> TextureAllocations;
+    private FTextureAllocations TextureAllocations;
 
-    public void Serialize(UnrealStream UStream)
+    public void Serialize(UnrealStream stream)
     {
-        UStream.Serialize(ref Tag);
+        stream.Serialize(ref Tag);
 
         if (Tag != Globals.PackageTag)
         {
@@ -50,37 +52,37 @@ public class FPackageFileSummary : ISerializable
             else throw new Exception("Unknown file signature!");
         }
         
-        UStream.Serialize(ref EngineVersion);
-        UStream.Serialize(ref LicenseeVersion);
-        UStream.Serialize(ref TotalHeaderSize);
-        UStream.Serialize(ref FolderName);
-        UStream.Serialize(ref PackageFlags);
+        stream.Serialize(ref EngineVersion);
+        stream.Serialize(ref LicenseeVersion);
+        stream.Serialize(ref TotalHeaderSize);
+        stream.Serialize(ref FolderName);
+        stream.Serialize(ref PackageFlags);
         
-        UStream.Serialize(ref NameCount);
-        UStream.Serialize(ref NameOffset);
-        UStream.Serialize(ref ExportCount);
-        UStream.Serialize(ref ExportOffset);
-        UStream.Serialize(ref ImportCount);
-        UStream.Serialize(ref ImportOffset);
-        UStream.Serialize(ref DependsOffset);
+        stream.Serialize(ref NameCount);
+        stream.Serialize(ref NameOffset);
+        stream.Serialize(ref ExportCount);
+        stream.Serialize(ref ExportOffset);
+        stream.Serialize(ref ImportCount);
+        stream.Serialize(ref ImportOffset);
+        stream.Serialize(ref DependsOffset);
         
-        UStream.Serialize(ref ImportExportGuidsOffset);
-        UStream.Serialize(ref ImportGuidsCount);
-        UStream.Serialize(ref ExportGuidsCount);
+        stream.Serialize(ref ImportExportGuidsOffset);
+        stream.Serialize(ref ImportGuidsCount);
+        stream.Serialize(ref ExportGuidsCount);
         
-        UStream.Serialize(ref ThumnailTableOffset);
+        stream.Serialize(ref ThumnailTableOffset);
         
-        UStream.Serialize(ref Guid);
-        UStream.Serialize(ref Generations);
+        stream.Serialize(ref Guid);
+        stream.Serialize(ref Generations);
         
-        UStream.Serialize(ref EngineBuild);
-        UStream.Serialize(ref CookerVersion);   // '0' if uncooked
+        stream.Serialize(ref EngineBuild);
+        stream.Serialize(ref CookerVersion);   // '0' if uncooked
         
-        UStream.Serialize(ref CompressionFlags);
-        UStream.Serialize(ref CompressedChunks);
-        UStream.Serialize(ref PackageSource);
+        stream.Serialize(ref CompressionFlags);
+        stream.Serialize(ref CompressedChunks);
+        stream.Serialize(ref PackageSource);
         
-        UStream.Serialize(ref AdditionalCookedPackages);
-        UStream.Serialize(ref TextureAllocations);
+        stream.Serialize(ref AdditionalCookedPackages);
+        stream.Serialize(ref TextureAllocations);
     }
 }

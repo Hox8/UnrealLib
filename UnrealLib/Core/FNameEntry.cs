@@ -1,52 +1,49 @@
-﻿using UnrealLib.Enums;
+﻿using System.Collections.Generic;
+using UnrealLib.Enums;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
 
 public class FNameEntry : ISerializable
 {
+    // Serialized
     internal string Name;
     internal ObjectFlags NameFlags;
 
-    /// <summary>
-    /// This object's index in the name table when re-serialized. Used by all FNames during serialization
-    /// </summary>
+    // Transient
     public int SerializedIndex;
-
-    // In-memory
+    public bool HasPositiveMinInstance;
 
     /// <summary>
     /// The import object referencing this name, if any.
-    /// In-memory only.
     /// </summary>
-    internal List<FObjectImport> Imports = new();
-    
+    /// <remarks>
+    /// In-memory only.
+    /// </remarks>
+    internal List<FObjectImport> Imports { get; private set; } = new();
+
     /// <summary>
     /// A list of export objects referencing this name.
-    /// In-memory only.
     /// </summary>
-    internal List<FObjectExport> Exports = new();
+    /// <remarks>
+    /// In-memory only.
+    /// </remarks>
+    internal List<FObjectExport> Exports { get; private set; } = new();
 
     // @TODO: Track index serialized to support moving names around
-    public void Serialize(UnrealStream UStream)
+    public void Serialize(UnrealStream stream)
     {
-        UStream.Serialize(ref Name);
-        UStream.Serialize(ref NameFlags);
+        stream.Serialize(ref Name);
+        stream.Serialize(ref NameFlags);
     }
+
+    public void Register(FObjectExport export)
+    {
+        Exports.Add(export);
+        if (export.ObjectName.Instance > 0) HasPositiveMinInstance = true;
+    }
+
+    public void Register(FObjectImport import) => Imports.Add(import);
 
     public override string ToString() => Name;
-
-    /// <summary>
-    /// Returns true if an export referencee has a name instance of more than 0. Used for UEE name consistency.
-    /// </summary>
-    /// <returns></returns>
-    internal bool HasPositiveMinInstance()
-    {
-        for (int i = 0; i < Exports.Count; i++)
-        {
-            if (Exports[i].ObjectName.Instance > 0) return true;
-        }
-
-        return false;
-    }
 }

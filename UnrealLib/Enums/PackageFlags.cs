@@ -1,73 +1,131 @@
-﻿namespace UnrealLib.Enums;
+﻿using System;
 
-// This reflect old flags.
+namespace UnrealLib.Enums;
 
+/// <summary>
+/// Flags describing an <see cref="UnrealPackage"/>.
+/// </summary>
 [Flags]
 public enum PackageFlags : uint
 {
+    /// <summary>
     /// Allow downloading package.
-    AllowDownload = 1 << 0,
+    /// </summary>
+    AllowDownload = 1U << 0,
 
+    /// <summary>
     /// Purely optional for clients.
-    ClientOptional = 1 << 1,
+    /// </summary>
+    ClientOptional = 1U << 1,
 
+    /// <summary>
     /// Only needed on the server side.
-    ServerSideOnly = 1 << 2,
+    /// </summary>
+    ServerSideOnly = 1U << 2,
 
+    /// <summary>
     /// Whether this package has been cooked for the target platform.
-    Cooked = 1 << 3,
+    /// </summary>
+    Cooked = 1U << 3,
 
+    /// <summary>
     /// Not trusted.
-    Unsecure = 1 << 4,
+    /// </summary>
+    Unsecure = 1U << 4,
 
+    /// <summary>
     /// Package was saved with newer version.
-    SavedWithNewerVersion = 1 << 5,
+    /// </summary>
+    SavedWithNewerVersion = 1U << 5,
 
+    /// <summary>
     /// Client needs to download this package.
-    Need = 1 << 15,
+    /// </summary>
+    Need = 1U << 15,
 
-    /// package is currently being compiled
-    Compiling = 1 << 16,
+    /// <summary>
+    /// Package is currently being compiled.
+    /// </summary>
+    Compiling = 1U << 16,
 
-    /// Set if the package contains a ULevel/ UWorld object
-    ContainsMap = 1 << 17,
+    /// <summary>
+    /// Set if the package contains a ULevel/ UWorld object.
+    /// </summary>
+    ContainsMap = 1U << 17,
 
-    /// Set if the package was loaded from the trashcan
-    Trash = 1 << 18,
+    /// <summary>
+    /// Set if the package was loaded from the trashcan.
+    /// </summary>
+    Trash = 1U << 18,
 
-    /// Set if the archive serializing this package cannot use lazy loading
-    DisallowLazyLoading = 1 << 19,
+    /// <summary>
+    /// Set if the archive serializing this package cannot use lazy loading.
+    /// </summary>
+    DisallowLazyLoading = 1U << 19,
 
-    /// Set if the package was created for the purpose of PIE
-    PlayInEditor = 1 << 20,
+    /// <summary>
+    /// Set if the package was created for the purpose of PIE.
+    /// </summary>
+    PlayInEditor = 1U << 20,
 
-    /// Package is allowed to contain UClasses and unrealscript
-    ContainsScript = 1 << 21,
+    /// <summary>
+    /// Package is allowed to contain UClasses and UnrealScript.
+    /// </summary>
+    ContainsScript = 1U << 21,
 
-    /// Package contains debug info (for UDebugger)
-    ContainsDebugInfo = 1 << 22,
+    /// <summary>
+    /// Package contains debug info (for UDebugger).
+    /// </summary>
+    ContainsDebugInfo = 1U << 22,
 
-    /// Package requires all its imports to already have been loaded
-    RequireImportsAlreadyLoaded = 1 << 23,
+    /// <summary>
+    /// Package requires all its imports to already have been loaded.
+    /// </summary>
+    RequireImportsAlreadyLoaded = 1U << 23,
 
-    /// All lighting in this package should be self contained
-    SelfContainedLighting = 1 << 24,
+    /// <summary>
+    /// All lighting in this package should be self-contained.
+    /// </summary>
+    /// <remarks>
+    /// Only applicable to IB1!
+    /// </remarks>
+    SelfContainedLighting = 1U << 24,
 
-    /// Package is being stored compressed, requires archive support for compression
-    StoreCompressed = 1 << 25,
+    /// <summary>
+    /// Package is being stored compressed, requires archive support for compression.
+    /// </summary>
+    StoreCompressed = 1U << 25,
 
-    /// Package is serialized normally, and then fully compressed after (must be decompressed before LoadPackage is called)
-    StoreFullyCompressed = 1 << 26,
+    /// <summary>
+    /// Package is serialized normally, and then fully compressed after (must be decompressed before LoadPackage is called).
+    /// </summary>
+    StoreFullyCompressed = 1U << 26,
 
-    /// Package was cooked allowing materials to inline their FMaterials (and hence shaders)
-    ContainsInlinedShaders = 1 << 27,
+    /// <summary>
+    /// Package was cooked allowing materials to inline their FMaterials (and hence shaders).
+    /// </summary>
+    /// <remarks>
+    /// Only applicable to IB1!
+    /// </remarks>
+    ContainsInlinedShaders = 1U << 27,
 
-    /// Package contains FaceFX assets and/or animsets
-    ContainsFaceFXData = 1 << 28,
+    /// <summary>
+    /// Package contains FaceFX assets and/or animsets.
+    /// </summary>
+    ContainsFaceFXData = 1U << 28,
 
-    /// Package was NOT created by a modder.  Internal data not for export
-    NoExportAllowed = 1 << 29,
+    /// <summary>
+    /// Package was NOT created by a modder. Internal data not for export.
+    /// </summary>
+    NoExportAllowed = 1U << 29,
 
-    /// Source has been removed to compress the package size
-    StrippedSource = 1 << 30
+    /// <summary>
+    /// Source has been removed to compress the package size.
+    /// </summary>
+    StrippedSource = 1U << 30,
+
+    /// <summary>
+    /// Package has editor-only data filtered.
+    /// </summary>
+    FilterEditorOnly = 1U << 31
 }
