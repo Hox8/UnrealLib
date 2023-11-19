@@ -1,134 +1,79 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib;
 
-[Flags]
-public enum StreamState : byte
+public class UnrealStream : Stream
 {
-    Loading = 1 << 0,
-    Saving = 1 << 1
-}
+    /// <summary>
+    /// Determines the size (in bytes) above which an incoming string must be allocated on the heap.
+    /// </summary>
+    private const int SmallStringLimit = 256;
 
-public class UnrealStream : IDisposable
-{
-    #region Private fields
-
-    private readonly Stream Stream;
-    private StreamState State;
-
-    #endregion
+    private readonly Stream _buffer;
 
     #region Properties
 
-    public bool ForceSerializeUnicode { get; set; } = false;
+    /// <summary>
+    /// Influences whether data is serialized from or to a data source.
+    /// </summary>
+    public bool IsLoading { get; private set; } = true;
 
-    public bool IsLoading => (State & StreamState.Loading) != 0;
-    // public int VersionOverride { get; set; } = 0;   // To be used in future when dealing with differences between the games' internals
-
-    public int Position
-    {
-        get => (int)Stream.Position;
-        set => Stream.Position = value;
-    }
-
-    public int Length
-    {
-        get => (int)Stream.Length;
-        set => Stream.SetLength(value);
-    }
+    /// <summary>
+    /// When true, strings will always be serialized as UTF-16.
+    /// </summary>
+    public bool ForceUTF16 { get; set; } = false;
 
     #endregion
 
     #region Constructors
 
-    public UnrealStream(string filePath, FileMode fileMode = FileMode.Open, FileAccess fileAccess = FileAccess.ReadWrite, StreamState defaultState = StreamState.Loading)
+    public UnrealStream(string path, FileMode mode = FileMode.OpenOrCreate, FileAccess access = FileAccess.ReadWrite)
     {
-        Stream = File.Open(filePath, fileMode, fileAccess, FileShare.Read);
-        State = defaultState;
+        _buffer = File.Open(path, mode, access, FileShare.Read);
     }
 
-    public UnrealStream(Stream stream, bool makeCopy, StreamState defaultState = StreamState.Loading)
+    public UnrealStream(byte[] buffer, bool resizable = false)
     {
-        if (makeCopy)
+        if (resizable)
         {
-            Stream = new MemoryStream();
-            stream.CopyTo(Stream);
+            _buffer = new MemoryStream();
+            _buffer.Write(buffer);
         }
         else
         {
-            Stream = stream;    // Referencing an external MemoryStream can be dangerous!
+            _buffer = new MemoryStream(buffer);
         }
-
-        State = defaultState;
     }
 
     #endregion
 
-    #region Public methods
-
-    // UnrealStream methods
-    public void StartSaving()
-    {
-        if (!Stream.CanWrite)
-        {
-            throw new Exception();
-        }
-
-        State |= StreamState.Saving;
-        State &= ~StreamState.Loading;
-    }
-
-    public void StartLoading()
-    {
-        State |= StreamState.Loading;
-        State &= ~StreamState.Saving;
-    }
-
-    public void ReadExactly(Span<byte> buffer) => Stream.ReadExactly(buffer);
-    public void Write(byte[] buffer, int offset, int count) => Stream.Write(buffer, offset, count);
-    public void Write(ReadOnlySpan<byte> buffer) => Stream.Write(buffer);
-
-    public byte[] ToArray()
-    {
-        if (!Stream.CanRead) throw new Exception("Stream does not support reading! You messed up.");
-            
-        Position = 0;
-
-        byte[] buffer = GC.AllocateUninitializedArray<byte>(Length);
-        ReadExactly(buffer);
-
-        return buffer;
-    }
-
-    // Generic IO methods
-    public void Open(string path) => throw new NotImplementedException();
-
-    public void Save() => Stream.Close();
-
-    #endregion
-
-    #region Single-value serializers
+    #region Serializers - Single values
 
     /// <summary>
     /// Serializes a single unmanaged type to/from the underlying stream.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe void Serialize<T>(ref T value) where T : unmanaged
     {
-        // I'm generally against using pointers in C#, but seeing as this avoids copying into an intermediate buffer,
-        // and it's the backbone of most Serialize() calls, I'm happy to use this here.
-
-        // This points to the value's memory address and wraps a Span around it, so it can be read from / written to
-        fixed (T* ptr = &value)
+        fixed (T* pValue = &value)
         {
-            var span = new Span<byte>(ptr, sizeof(T));
+            // Wrap a span around the pointer so it can be used by the Stream API
+            var span = new Span<byte>(pValue, sizeof(T));
 
-            if (IsLoading) Stream.ReadExactly(span);
-            else Stream.Write(span);
+            if (IsLoading)
+            {
+                ReadExactly(span);
+            }
+            else
+            {
+                Write(span);
+            }
         }
     }
 
@@ -136,68 +81,67 @@ public class UnrealStream : IDisposable
     /// Serializes a single string to/from the underlying stream.
     /// </summary>
     /// <remarks>
-    /// Serialized strings are expected use the following format:
+    /// Serialized strings are required to use the following format:
     /// <br/><br/>1. An <see cref="Int32"/> size. Negative values indicate Unicode encoding, positive indicates ASCII.
     /// <br/><br/>2. A null-terminated string in the aforementioned encoding.
     /// </remarks>
     public void Serialize(ref string value)
     {
-        Span<byte> lengthBuffer = stackalloc byte[4];
-        Span<byte> stringBuffer;
+        int length = 0;
 
         if (IsLoading)
         {
-            Stream.ReadExactly(lengthBuffer);
-            int length = MemoryMarshal.Read<int>(lengthBuffer);
+            Serialize(ref length);
+            int absoluteLength = length < 0 ? length * -2 : length;
 
-            // Reads full C-style string into buffer and trims off null character
+            // Allocate on the stack if the string is small enough
+            var buffer = absoluteLength <= SmallStringLimit
+                ? stackalloc byte[absoluteLength]
+                : GC.AllocateUninitializedArray<byte>(absoluteLength);
 
-            if (length > 0)
-            {
-                stringBuffer = new byte[length];
-                Stream.ReadExactly(stringBuffer);
-                value = Encoding.ASCII.GetString(stringBuffer[..^1]);
-            }
-            else if (length < 0)
-            {
-                stringBuffer = new byte[length * -2];
-                Stream.ReadExactly(stringBuffer);
-                value = Encoding.Unicode.GetString(stringBuffer[..^2]);
-            }
-            else
-            {
-                value = string.Empty;
-            }
+            ReadExactly(buffer);
+
+            // Get string from bytes, ignoring the last w/char (null terminator)
+            value = length == 0 ? string.Empty : length < 0                 // Empty string
+                ? new string(MemoryMarshal.Cast<byte, char>(buffer[..^2]))  // UTF16 string
+                : Encoding.ASCII.GetString(buffer[..^1]);                   // ASCII string
         }
         else
         {
-            // If string is null or empty, write an int32 0 value
             if (string.IsNullOrEmpty(value))
             {
-                lengthBuffer.Clear();
-                Stream.Write(lengthBuffer);
+                Serialize(ref length);
             }
-            // If string can be turned into ASCII and we aren't forcing Unicode, write ASCII string
-            else if (!ForceSerializeUnicode && IsPureASCII(value))
+            else if (!ForceUTF16 && Ascii.IsValid(value))
             {
-                MemoryMarshal.Write(lengthBuffer, value.Length + 1);
-                Stream.Write(lengthBuffer);
-
-                stringBuffer = Encoding.ASCII.GetBytes(value);
-                Stream.Write(stringBuffer);
-                Stream.WriteByte(0);    // Append ASCII null terminator
+                length = value.Length + 1;  // +1 to accommodate null terminator
+                Serialize(ref length);
+                Write(Encoding.ASCII.GetBytes(value));
+                WriteByte(0);
             }
-            // Write Unicode string
             else
             {
-                MemoryMarshal.Write(lengthBuffer, (value.Length + 1) * -1);
-                Stream.Write(lengthBuffer);
-
-                stringBuffer = Encoding.Unicode.GetBytes(value);
-                Stream.Write(stringBuffer);
-                Stream.WriteByte(0);
-                Stream.WriteByte(0);    // Append Unicode null terminator
+                length = ~value.Length;     // +1 for null terminator, and negated to indicate UTF16
+                Serialize(ref length);
+                Write(MemoryMarshal.Cast<char, byte>(value.AsSpan()));
+                WriteByte(0);
+                WriteByte(0);
             }
+        }
+    }
+
+    public void Serialize<T1, T2>(ref KeyValuePair<T1, T2> value) where T1 : unmanaged where T2 : unmanaged
+    {
+        // @WARN: Will raise null exception if uninitialized values are passed
+        T1 left = value.Key;
+        T2 right = value.Value;
+
+        Serialize(ref left);
+        Serialize(ref right);
+
+        if (IsLoading)
+        {
+            value = new(left, right);
         }
     }
 
@@ -215,126 +159,126 @@ public class UnrealStream : IDisposable
         value.Serialize(this);
     }
 
-
     #endregion
 
-    #region List serializers
+    #region Serializers - List values
 
-    public void Serialize<T>(ref List<T> value, int length = -1) where T : unmanaged
+    /// <summary>
+    /// Helper method used across list serializers.<br/>
+    /// Serializes length to/from the stream if non-negative, and resizes the list if loading.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ListSerializationHelper<T>(ref List<T> value, int length = -1)
     {
-        Span<byte> lengthBuffer = stackalloc byte[4];
-
-        if (IsLoading)
+        // If we haven't passed a length, serialize to/from stream as normal.
+        if (length < 0)
         {
-            // If length wasn't specified, then read one from stream
-            if (length < 0)
+            if (!IsLoading)
             {
-                Stream.ReadExactly(lengthBuffer);
-                length = MemoryMarshal.Read<int>(lengthBuffer);
+                // Get list length and serialize it to the stream
+                length = value.Count;
             }
 
-            // Initialize list
+            Serialize(ref length);
+        }
+
+        // Allocate a new list if we're loading from the stream
+        if (IsLoading)
+        {
             value = new List<T>(length);
             CollectionsMarshal.SetCount(value, length);
         }
-        else if (length < 0)
-        {
-            // If length wasn't specified, write list length to disk.
-            MemoryMarshal.Write(lengthBuffer, value.Count);
-            Stream.Write(lengthBuffer);
-        }
+    }
 
-        // Serialize each item of the List
-        var listSpan = CollectionsMarshal.AsSpan(value);
-        for (int i = 0; i < listSpan.Length; i++)
+    public void Serialize<T>(ref List<T> value, int length = -1) where T : unmanaged
+    {
+        ListSerializationHelper(ref value, length);
+
+        var sList = CollectionsMarshal.AsSpan(value);
+        for (int i = 0; i < sList.Length; i++)
         {
-            Serialize(ref listSpan[i]);
+            Serialize(ref sList[i]);
         }
     }
 
     public void Serialize(ref List<string> value, int length = -1)
     {
-        Span<byte> lengthBuffer = stackalloc byte[4];
+        ListSerializationHelper(ref value, length);
 
-        if (IsLoading)
+        var sList = CollectionsMarshal.AsSpan(value);
+        for (int i = 0; i < sList.Length; i++)
         {
-            // If length wasn't specified, then read one from stream
-            if (length < 0)
-            {
-                Stream.ReadExactly(lengthBuffer);
-                length = MemoryMarshal.Read<int>(lengthBuffer);
-            }
-
-            // Initialize list
-            value = new List<string>(length);
-            CollectionsMarshal.SetCount(value, length);
+            Serialize(ref sList[i]);
         }
-        else if (length < 0)
-        {
-            // If length wasn't specified, write list length to disk.
-            MemoryMarshal.Write(lengthBuffer, value.Count);
-            Stream.Write(lengthBuffer);
-        }
+    }
 
-        // Serialize each item of the List
-        var listSpan = CollectionsMarshal.AsSpan(value);
-        for (int i = 0; i < listSpan.Length; i++)
+    public void Serialize<T1, T2>(ref List<KeyValuePair<T1, T2>> value) where T1 : unmanaged where T2 : unmanaged
+    {
+        ListSerializationHelper(ref value);
+
+        var sList = CollectionsMarshal.AsSpan(value);
+        for (int i = 0; i < sList.Length; i++)
         {
-            Serialize(ref listSpan[i]);
+            Serialize(ref sList[i]);
         }
     }
 
     public void Serialize<T>(ref List<T> value, int length = -1, byte _ = 0) where T : ISerializable, new()
     {
-        Span<byte> lengthBuffer = stackalloc byte[4];
+        ListSerializationHelper(ref value, length);
 
-        if (IsLoading)
+        var sList = CollectionsMarshal.AsSpan(value);
+        for (int i = 0; i < sList.Length; i++)
         {
-            // If length wasn't specified, then read one from stream
-            if (length < 0)
-            {
-                Stream.ReadExactly(lengthBuffer);
-                length = MemoryMarshal.Read<int>(lengthBuffer);
-            }
-
-            // Initialize list
-            value = new List<T>(length);
-            CollectionsMarshal.SetCount(value, length);
-        }
-        else if (length < 0)
-        {
-            // If length wasn't specified, write List length to disk.
-            MemoryMarshal.Write(lengthBuffer, value.Count);
-            Stream.Write(lengthBuffer);
-        }
-
-        // Serialize each item of the List
-        var listSpan = CollectionsMarshal.AsSpan(value);
-        for (int i = 0; i < listSpan.Length; i++)
-        {
-            Serialize(ref listSpan[i]);
+            Serialize(ref sList[i]);
         }
     }
 
     #endregion
 
-    #region Helpers
+    #region Stream methods
 
-    public static bool IsPureASCII(string value)
+    public void StartSaving() => IsLoading = false;
+    public void StartLoading() => IsLoading = true;
+
+    public byte[] ToArray()
     {
-        for (int i = 0; i < value.Length; i++)
-        {
-            if (value[i] > 127) return false;
-        }
+        if (_buffer is MemoryStream ms) return ms.ToArray();
 
-        return true;
+        var buffer = GC.AllocateUninitializedArray<byte>((int)Length);
+        Position = 0;
+        Read(buffer);
+
+        return buffer;
+    }
+
+    public override bool CanRead => _buffer.CanRead;
+
+    public override bool CanSeek => _buffer.CanSeek;
+
+    public override bool CanWrite => _buffer.CanWrite;
+
+    public override long Length => _buffer.Length;
+
+    public override long Position { get => _buffer.Position; set => _buffer.Position = value; }
+
+    public override void Flush() => _buffer.Flush();
+
+    public override int Read(byte[] buffer, int offset, int count) => _buffer.Read(buffer, offset, count);
+
+    public override long Seek(long offset, SeekOrigin origin) => _buffer.Seek(offset, origin);
+
+    public override void SetLength(long value) => _buffer.SetLength(value);
+
+    public override void Write(byte[] buffer, int offset, int count) => _buffer.Write(buffer, offset, count);
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _buffer.Close();
+        }
     }
 
     #endregion
-
-    public void Dispose()
-    {
-        Stream.Dispose();
-        GC.SuppressFinalize(this);
-    }
 }

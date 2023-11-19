@@ -30,9 +30,9 @@ public class FPackageFileSummary : ISerializable
 
     private FGuid Guid;
     private List<FGenerationInfo> Generations;
-    
-    private int EngineBuild;
-    private int CookerVersion;
+
+    internal int EngineBuild;
+    internal int CookerVersion;
 
     private CompressionFlags CompressionFlags;
     private List<FCompressedChunk> CompressedChunks;
@@ -76,7 +76,7 @@ public class FPackageFileSummary : ISerializable
         stream.Serialize(ref Generations);
         
         stream.Serialize(ref EngineBuild);
-        stream.Serialize(ref CookerVersion);   // '0' if uncooked
+        stream.Serialize(ref CookerVersion);
         
         stream.Serialize(ref CompressionFlags);
         stream.Serialize(ref CompressedChunks);

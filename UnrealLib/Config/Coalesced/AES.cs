@@ -15,6 +15,8 @@ public static class AES
         Aes.Padding = PaddingMode.Zeros;
     }
 
+    // AES keys for each game that uses encryption. Obtained via RE.
+    // These keys appear to be consistent from initial to latest release for each game.
     private static byte[] GetGameKey(Game game) => game switch
     {
         Game.IB2 => "|FK}S];v]!!cw@E4l-gMXa9yDPvRfF*B"u8.ToArray(),
@@ -31,8 +33,11 @@ public static class AES
     public static void CryptoECB(UnrealStream stream, Game game, bool isDecrypting)
     {
         // If stream isn't a valid ECB block size (multiple of 16), pad its length to the next multiple
-        int remainder = stream.Length % 16;
-        if (remainder != 0) stream.Length = stream.Length + 16 - remainder;
+        int remainder = (int)stream.Length % 16;
+        if (remainder != 0)
+        {
+            stream.SetLength(stream.Length + 16 - remainder);
+        }
 
         // Create Crypto transformer
         using var crypto = isDecrypting
@@ -41,26 +46,33 @@ public static class AES
 
         // Do Crypto
         stream.Position = 0;
-        var result = crypto.TransformFinalBlock(stream.ToArray(), 0, stream.Length);
+        var result = crypto.TransformFinalBlock(stream.ToArray(), 0, (int)stream.Length);
 
         // Write result back to stream
         stream.Position = 0;
         stream.Write(result);
-        stream.Length = stream.Position;
+        stream.SetLength(stream.Position);
     }
 
     /// <summary>
-    /// Tries to decrypt a 128-bit block of memory using the passed game's key.
+    /// Attempts to decrypt a 128-bit block of memory using the specified game key.
     /// </summary>
-    /// <returns>True if the block was successfully decrypted.</returns>
+    /// <returns>True if the block was successfully decrypted, False if not.</returns>
     public static bool TryDecryptBlock(Span<byte> block, Game game)
     {
         // Decrypt block using game key
         block = Aes.CreateDecryptor(GetGameKey(game), null).TransformFinalBlock(block.ToArray(), 0, 16);
 
-        // Return whether block decrypted successfully
         return BlockIsUnencrypted(block);
     }
 
+    /// <summary>
+    /// Tests whether the first compressed block of a Coalesced file is encrypted.
+    /// </summary>
+    /// <remarks>
+    /// This takes advantage of the fact that the first four bytes in the block represent the int32 number of ini files.
+    /// <br/>The upper two bytes will always be 0 for reasonable / valid Coalesced files.
+    /// </remarks>
+    /// <returns>True if the block is unencrytped, False if not.</returns>
     public static bool BlockIsUnencrypted(Span<byte> block) => block[2] == 0 && block[3] == 0;
 }

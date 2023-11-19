@@ -22,6 +22,7 @@ public class Ini : ISerializable
     public bool Modified = false;
 
     public Section Globals = new();
+    public bool HasDuplicateSections = false;
 
     /// <summary>
     /// Parameterless constructor. Used internally by UnrealStream serializer.
@@ -31,15 +32,15 @@ public class Ini : ISerializable
     /// <summary>
     /// Constructs a new <see cref="Ini"/> instance and reads a file into it.
     /// </summary>
-    public Ini(string filePath)
+    public Ini(string filePath, bool enforceUniqueSections = false)
     {
         Path = filePath;
-        Open();
+        Open(enforceUniqueSections: enforceUniqueSections);
     }
 
     #region IO Methods
 
-    public void Open(string? filePath = null)
+    public void Open(string? filePath = null, bool enforceUniqueSections = true)
     {
         // If a file override wasn't passed, use existing value
         filePath ??= Path;
@@ -51,7 +52,11 @@ public class Ini : ISerializable
             if (line[0] == '[' && line[^1] == ']')
             {
                 // Add new section to Sections
-                TryAddSection(line[1..^1], out curSection);
+                if (!TryAddSection(line[1..^1], out curSection) && enforceUniqueSections)
+                {
+                    HasDuplicateSections = true;
+                    return;
+                }
                 continue;
             }
 
@@ -91,109 +96,27 @@ public class Ini : ISerializable
 
     #region Getters and Setters
 
-    /// <summary>
-    /// Attempts to parse a <see cref="string"/> from a <see cref="Property"/> within a <see cref="Section"/>.
-    /// </summary>
-    /// <returns>True if the <see cref="Section"/> and <see cref="Property"/> was found, otherwise false.</returns>
-    public bool GetString(string keyName, string sectionName, out string result)
+    public bool GetValue<T>(string key, string section, out T value)
     {
-        if (TryGetSection(sectionName, out var section))
+        if (TryGetSection(section, out var _section))
         {
-            return section.GetString(keyName, out result);
+            return _section.GetValue(key, out value);
         }
 
-        result = string.Empty;
+        value = default;
         return false;
     }
 
-    /// <summary>
-    /// Attempts to parse a <see cref="bool"/> from a <see cref="Property"/> within a <see cref="Section"/>.
-    /// </summary>
-    /// <returns>True if the <see cref="Section"/> and <see cref="Property"/> was found and parsed successfully, otherwise false.</returns>
-    public bool GetBool(string keyName, string sectionName, out bool result)
+    public void SetValue<T>(string key, string section, T value)
     {
-        if (TryGetSection(sectionName, out var section))
+        if (!TryGetSection(section, out var _section))
         {
-            return section.GetBool(keyName, out result);
+            _section = new Section(key);
+            Sections.Add(_section);
         }
 
-        result = default;
-        return false;
+        _section.SetValue(key, value);
     }
-
-    /// <summary>
-    /// Attempts to parse an <see cref="int"/> from a <see cref="Property"/> within a <see cref="Section"/>.
-    /// </summary>
-    /// <returns>True if the <see cref="Section"/> and <see cref="Property"/> was found and parsed successfully, otherwise false.</returns>
-    public bool GetInt(string keyName, string sectionName, out int result)
-    {
-        if (TryGetSection(sectionName, out var section))
-        {
-            return section.GetInt(keyName, out result);
-        }
-
-        result = default;
-        return false;
-    }
-
-    /// <summary>
-    /// Attempts to parse a <see cref="float"/> from a <see cref="Property"/> within a <see cref="Section"/>.
-    /// </summary>
-    /// <returns>True if the <see cref="Section"/> and <see cref="Property"/> was found and parsed successfully, otherwise false.</returns>
-    public bool GetFloat(string keyName, string sectionName, out float result)
-    {
-        if (TryGetSection(sectionName, out var section))
-        {
-            return section.GetFloat(keyName, out result);
-        }
-
-        result = default;
-        return false;
-    }
-
-    /// <summary>
-    /// Attempts to parse a single-line array from a <see cref="Property"/> within a <see cref="Section"/>.
-    /// </summary>
-    /// <returns>True if the <see cref="Section"/> and <see cref="Property"/> was found and parsed successfully, otherwise false.</returns>
-    public bool GetArraySingleLine(string keyName, string sectionName, out string[] result)
-    {
-        if (TryGetSection(sectionName, out var section))
-        {
-            return section.GetArraySingleLine(keyName, out result);
-        }
-
-        result = default;
-        return false;
-    }
-
-    /// <summary>
-    /// Sets a <see cref="Property"/> value within a <see cref="Section"/>.
-    /// </summary>
-    /// <remarks>Adds required <see cref="Section"/> and <see cref="Property"/> if either don't exist.</remarks>
-    public void SetString(string keyName, string sectionName, string value)
-    {
-        // Add section if it doesn't exist
-        if (!TryGetSection(sectionName, out var section))
-        {
-            section = new Section(sectionName);
-            Sections.Add(section);
-        }
-
-        section.SetString(keyName, value);
-    }
-
-    /// <summary><inheritdoc cref="SetString"/></summary>
-    /// <remarks><inheritdoc cref="SetString"/></remarks>
-    public void SetBool(string keyName, string sectionName, bool value) => SetString(keyName, sectionName, value.ToString());
-    /// <summary><inheritdoc cref="SetString"/></summary>
-    /// <remarks><inheritdoc cref="SetString"/></remarks>
-    public void SetInt(string keyName, string sectionName, int value) => SetString(keyName, sectionName, value.ToString());
-    /// <summary><inheritdoc cref="SetString"/></summary>
-    /// <remarks><inheritdoc cref="SetString"/></remarks>
-    public void SetFloat(string keyName, string sectionName, float value) => SetString(keyName, sectionName, value.ToString());
-    /// <summary><inheritdoc cref="SetString"/></summary>
-    /// <remarks><inheritdoc cref="SetString"/></remarks>
-    public void SetArraySingleLine(string keyName, string sectionName, string[] value) => SetString(keyName, sectionName, $"({string.Join(',', value)})");
 
     #endregion
 
@@ -201,25 +124,43 @@ public class Ini : ISerializable
 
     public bool TryGetSection(string sectionName, out Section? result)
     {
-        result = GetSection(sectionName);
-        return result is not null;
+        foreach (var section in Sections)
+        {
+            if (section.Name.Equals(sectionName, StringComparison.OrdinalIgnoreCase))
+            {
+                result = section;
+                return true;
+            }
+        }
+
+        result = default;
+        return false;
+    }
+
+    public bool TryRemoveSection(string sectionName)
+    {
+        if (TryGetSection(sectionName, out var section))
+        {
+            Sections.Remove(section);
+            return true;
+        }
+
+        return false;
     }
 
     public bool TryAddSection(string sectionName, out Section result)
     {
-        var section = GetSection(sectionName);
-        if (section is not null)
+        if (!TryGetSection(sectionName, out result))
         {
-            result = section;
-            return false;
+            result = new Section(sectionName);
+            Sections.Add(result);
+            return true;
         }
 
-        result = new Section(sectionName);
-        Sections.Add(result);
-        return true;
+        return false;
     }
 
-    private Section? GetSection(string sectionName)
+    /*private Section? GetSection(string sectionName)
     {
         foreach (var section in Sections)
         {
@@ -230,7 +171,7 @@ public class Ini : ISerializable
         }
 
         return null;
-    }
+    }*/
 
     private static void WriteSectionToDisk(StreamWriter sw, IniOptions options, Section section)
     {

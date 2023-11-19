@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 using UnrealLib.Enums;
+using UnrealLib.Experimental.UnObj;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
@@ -19,20 +21,18 @@ public abstract class FObjectResource
     internal int SerializedOffset;
     internal FObjectResource? Outer;
     
-    public void Link(UnrealPackage pkg, int idx)
+    // Properties
+    public string Name => ObjectName.Name.Name;
+    
+    public virtual void Link(UnrealPackage pkg, int idx)
     {
         SerializedIndex = idx;
         
         // Link Outer object
-        Outer = OuterIndex switch
-        {
-            > 0 => pkg.Exports[OuterIndex - 1],
-            < 0 => pkg.Imports[~OuterIndex],
-            _ => null
-        };
+        Outer = pkg.GetObject(OuterIndex);
         
         // Link names
-        ObjectName.Name = pkg.Names[ObjectName.Index];
+        ObjectName.Name = pkg.GetName(ObjectName.Index);
     }
     
     public override string ToString()
@@ -58,7 +58,7 @@ public class FObjectImport : FObjectResource, ISerializable
 
     public void Serialize(UnrealStream stream)
     {
-        SerializedOffset = stream.Position;
+        SerializedOffset = (int)stream.Position;
         
         stream.Serialize(ref ClassPackage);
         stream.Serialize(ref ClassName);
@@ -66,13 +66,13 @@ public class FObjectImport : FObjectResource, ISerializable
         stream.Serialize(ref ObjectName);
     }
 
-    public new void Link(UnrealPackage pkg, int idx)
+    public override void Link(UnrealPackage pkg, int idx)
     {
         base.Link(pkg, idx);
         
         // Link names
-        ClassPackage.Name = pkg.Names[ClassPackage.Index];
-        ClassName.Name = pkg.Names[ClassName.Index];
+        ClassPackage.Name = pkg.GetName(ClassPackage.Index);
+        ClassName.Name = pkg.GetName(ClassName.Index);
         
         // Let ObjectName know that this import is using it
         ObjectName.Name.Register(this);
@@ -81,26 +81,40 @@ public class FObjectImport : FObjectResource, ISerializable
 
 public class FObjectExport : FObjectResource, ISerializable
 {
-    // Serialized
+    #region Serialized
+
+    /// <summary>Serialized index pointing to this UObject's class in the import/export table.</summary>
     internal PackageIdx ClassIndex;
+    /// <summary>Serialized index pointing to this UObject's parent object in the import/export table.</summary>
     internal PackageIdx SuperIndex;
+    /// <summary>Serialized index pointing to this UObject's template object in the import/export table.</summary>
     internal PackageIdx ArchetypeIndex;
+    /// <summary>Flags describing this UObject.</summary>
     internal ObjectFlags ObjectFlags;
-    internal int SerialSize;
-    internal int SerialOffset;
+    /// <summary>The length of this UObject's data after serializing to disk.</summary>
+    public int SerialSize;
+    /// <summary>The file offset where this UObject's data is serialized.</summary>
+    public int SerialOffset;
+    /// <summary>Flags describing this FObjectExport.</summary>
     internal ExportFlags ExportFlags;
     internal List<int> GenerationNetObjectCount;
     internal FGuid PackageGuid;
     internal PackageFlags PackageFlags;
-    
-    // Transient
-    internal FObjectResource? Class;
+
+    #endregion
+
+    #region Transient
+
+    internal FObjectResource Class;
     internal FObjectResource? Super;
     internal FObjectResource? Archetype;
+    internal UObject? Object;
+
+    #endregion
 
     public void Serialize(UnrealStream stream)
     {
-        SerializedOffset = stream.Position;
+        SerializedOffset = (int)stream.Position;
         
         stream.Serialize(ref ClassIndex);
         stream.Serialize(ref SuperIndex);
@@ -118,57 +132,24 @@ public class FObjectExport : FObjectResource, ISerializable
         stream.Serialize(ref PackageFlags);
     }
 
-    public new void Link(UnrealPackage pkg, int idx)
+    public override void Link(UnrealPackage pkg, int idx)
     {
         base.Link(pkg, idx);
-        
+
         // Link Class object
-        Class = ClassIndex switch
-        {
-            > 0 => pkg.Exports[ClassIndex - 1],
-            < 0 => pkg.Imports[~ClassIndex],
-            _ => null
-        };
+        // If ClassIndex is 0, set Class to UClass. Class reference should NEVER be null.
+        // PKG needs to cache common names like UClass and many more so we can do this without repeated lookups
+        // @TODO
+        // Class = ClassIndex == 0 ? null : pkg.GetObject(ClassIndex);
+        Class = pkg.GetObject(ClassIndex);
 
         // Link Super object
-        Super = SuperIndex switch
-        {
-            > 0 => pkg.Exports[SuperIndex - 1],
-            < 0 => pkg.Imports[~SuperIndex],
-            _ => null
-        };
+        Super = pkg.GetObject(SuperIndex);
 
         // Link Archetype object
-        Archetype = ArchetypeIndex switch
-        {
-            > 0 => pkg.Exports[ArchetypeIndex - 1],
-            < 0 => pkg.Imports[~ArchetypeIndex],
-            _ => null
-        };
+        Archetype = pkg.GetObject(ArchetypeIndex);
         
         // Let ObjectName know that this export is using it
         ObjectName.Name.Register(this);
-    }
-
-    /// <summary>
-    /// Replaces this export's UObject data entirely with that a passed byte span.
-    /// </summary>
-    /// <remarks>
-    /// Replacement UObject data must be self-contained i.e. containing UObject header, footer etc.
-    /// </remarks>
-    public void ReplaceData(UnrealStream stream, Span<byte> data)
-    {
-        stream.StartSaving();
-
-        SerialSize = data.Length;
-        SerialOffset = stream.Length;
-
-        stream.Position = SerializedOffset;
-        Serialize(stream);
-
-        stream.Position = stream.Length;
-        stream.Write(data);
-        
-        // stream.StartLoading();
     }
 }

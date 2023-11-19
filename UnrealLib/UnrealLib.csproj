@@ -1,25 +1,28 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>disable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <LangVersion>12</LangVersion>
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<Nullable>enable</Nullable>
 		<IsAotCompatible>true</IsAotCompatible>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-		<Features>InterceptorsPreview</Features>
-    </PropertyGroup>
-    
-    <PropertyGroup Condition="'${OS}' == 'OSX' Or '${OS}' == 'Unix'">
-        <DefineConstants>UNIX</DefineConstants>
-    </PropertyGroup>
-    
-    <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-        <DebugType>none</DebugType>
-    </PropertyGroup>
-    
-    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-      <DebugType>full</DebugType>
-    </PropertyGroup>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<!-- Comment this out if unneeded to save ~75kb -->
+		<DefineConstants>WITH_COALESCED_FOLDER_SUPPORT</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'${OS}' == 'OSX' Or '${OS}' == 'Unix'">
+		<DefineConstants>UNIX</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+		<DebugType>none</DebugType>
+	</PropertyGroup>
+
+	<PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+		<DebugType>full</DebugType>
+	</PropertyGroup>
 
 </Project>

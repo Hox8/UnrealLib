@@ -3,6 +3,29 @@ using UnrealLib.Interfaces;
 
 namespace UnrealLib.Config;
 
+public class KeyBind
+{
+    string Name;
+    string Command;
+    // bool Control, Shift, Alt, bIgnoreControl, bIgnoreShift, bIgnoreAlt;
+
+    public KeyBind(string line)
+    {
+        if (!line.StartsWith('(') || !line.EndsWith(')')) return;
+
+        string[] sub = line[1..^1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        foreach (var element in sub)
+        {
+            var prop = new Property(element);
+
+            if (prop.Key.Equals(nameof(Name), StringComparison.OrdinalIgnoreCase))
+                Name = prop.Value;
+            else if (prop.Key.Equals(nameof(Command), StringComparison.OrdinalIgnoreCase))
+                Command = prop.Value;
+        }
+    }
+}
+
 // Change to struct?
 public class Property : ISerializable
 {
@@ -39,7 +62,7 @@ public class Property : ISerializable
         string[] sub = line.Split('=', 2, StringSplitOptions.TrimEntries);
 
         Key = sub[0];
-        Value = sub.Length == 2 ? sub[1] : string.Empty;
+        Value = sub.Length == 2 ? sub[1].Replace("\\n", "\n") : string.Empty;
     }
 
     public void Serialize(UnrealStream stream)

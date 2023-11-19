@@ -18,17 +18,24 @@ public class Coalesced : UnrealArchive
     /// </summary>
     private const string CoalescedHelperName = "ibhelper";
 
+    /// <summary>
+    /// HashSet used when saving Coalesced folders back into Coalesced files. Filters out unrelated files.
+    /// </summary>
     private static readonly HashSet<string> ExtensionFilter = new(StringComparer.OrdinalIgnoreCase)
     {
         "INI", "INT", "BRA", "CHN", "DEU", "DUT", "ESN", "FRA", "ITA",
         "JPN", "KOR", "POR", "RUS", "SWE", "ESM", "IND", "THA"
     };
     
-    public Coalesced(string? path = null, Game game = Game.Unknown)
+    public Coalesced(string path, Game game = Game.Unknown, bool delayInit = false)
     {
+        InitPathInfo(path);
         Game = game;
 
-        Open(path);
+        if (!delayInit)
+        {
+            Open();
+        }
     }
     
     public sealed override bool Open(string? path = null)
@@ -56,7 +63,8 @@ public class Coalesced : UnrealArchive
             
             try
             {
-                stream = new UnrealStream(path, FileMode.Create, FileAccess.ReadWrite, StreamState.Saving);
+                stream = new UnrealStream(path, FileMode.Create);
+                stream.StartSaving();
             }
             catch
             {
@@ -64,7 +72,7 @@ public class Coalesced : UnrealArchive
                 return false;
             }
             
-            stream.ForceSerializeUnicode = Options.ForceUnicode;
+            stream.ForceUTF16 = Options.ForceUnicode;
             var options = new IniOptions(Options);
 
             // Sanitize Ini paths. Needs to be Windows-style, and have the relative segment
@@ -86,8 +94,9 @@ public class Coalesced : UnrealArchive
                 AES.CryptoECB(stream, Game, false);
             }
             
-            stream.Save();
+            stream.Flush();
         }
+#if WITH_COALESCED_FOLDER_SUPPORT
         // Saving Coalesced folder
         else
         {
@@ -122,6 +131,9 @@ public class Coalesced : UnrealArchive
             helper.WriteByte((byte)Game);
             File.SetAttributes(helper.Name, FileAttributes.Hidden);
         }
+#endif
+        
+        Dispose();
         return true;
     }
 
@@ -135,6 +147,7 @@ public class Coalesced : UnrealArchive
             return false;
         }
 
+#if WITH_COALESCED_FOLDER_SUPPORT
         // Open directory
         if ((attributes & FileAttributes.Directory) != 0)
         {
@@ -150,17 +163,21 @@ public class Coalesced : UnrealArchive
             {
                 // Filter out non-ini extensions (which are all length 3)
                 if (!ExtensionFilter.Contains(file[^3..])) continue;
-                
+
                 if (TryAddIni(file[(QualifiedPath.Length + 1)..], out var ini))
+                {
                     ini.Open(file);
+                    Inis.Add(ini);
+                }
             }
         }
         
         // Open file
         else
+#endif
         {
             // Make a copy so we don't alter the original file
-            UnrealStream stream = new(File.OpenRead(QualifiedPath), true);
+            using UnrealStream stream = new(File.ReadAllBytes(QualifiedPath));
 
             if (!TryDecrypt(stream))
             {
@@ -185,7 +202,7 @@ public class Coalesced : UnrealArchive
                 if (ini.Path.StartsWith(@"..\..\")) ini.Path = ini.Path[6..];
             }
 
-            // If we were expecting a certain game, but got something else
+            // If we were expecting one game, but got something else...
             if (Game is not Game.Unknown && DecryptedWith != Game)
             {
                 ErrorContext = $"Was expecting {Game} Coalesced file, but got {DecryptedWith} instead!";
@@ -195,25 +212,44 @@ public class Coalesced : UnrealArchive
             // Otherwise, set Game to DecryptedWith so we know what encryption key to use later.
             Game = DecryptedWith;
         }
-        
+
+        State = UnrealArchiveState.Loaded;
         return true;
+    }
+
+    // Dispose() generally indicates the class is no longer being used, but we're setting vars as if we are?
+    // @TODO Use a Clear() etc method instead
+    public override void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        Inis.Clear();
+        State = UnrealArchiveState.Unloaded;
+        
+        GC.SuppressFinalize(this);
     }
 
     private bool TryDecrypt(UnrealStream stream)
     {
+        // Allocate enough memory so we can copy the first compressed block into memory.
+        // We'll test compression keys against it rather than the entire stream.
         Span<byte> block = stackalloc byte[16];
 
         stream.Position = 0;
         stream.ReadExactly(block);
 
+        // If we're already unencrypted, then we must have an IB1 coalesced file
         if (AES.BlockIsUnencrypted(block))
         {
             DecryptedWith = Game.IB1;
             return true;
         }
 
+        // Start from IB2 and iterate each game up to / including VOTE.
         for (DecryptedWith = Game.IB2; DecryptedWith <= Game.Vote; DecryptedWith = (Game)((byte)DecryptedWith << 1))
         {
+            // If the compressed block successfully decrypted, decrypt the whole stream.
             if (AES.TryDecryptBlock(block, DecryptedWith))
             {
                 AES.CryptoECB(stream, DecryptedWith, true);
@@ -221,6 +257,7 @@ public class Coalesced : UnrealArchive
             }
         }
 
+        // None of the AES keys could decrypt the initial block - decryption failed.
         DecryptedWith = Game.Unknown;
         return false;
     }
@@ -240,21 +277,41 @@ public class Coalesced : UnrealArchive
         return game;
     }
 
-    // Returns true if ini was added
-    private bool TryAddIni(string iniName, out Ini result)
+    public bool TryAddIni(string iniName, out Ini result)
     {
-        foreach (var ini in Inis)
+        if (TryGetIni(iniName, out result)) return false;
+
+        result = new Ini { Path = iniName };
+        return true;
+    }
+
+    public bool TryRemoveIni(string iniName)
+    {
+        for (int i = 0; i < Inis.Count; i++)
         {
-            if (ini.Path.Equals(iniName))
+            if (Inis[i].Path.Equals(iniName, StringComparison.OrdinalIgnoreCase))
             {
-                result = ini;
-                return false;
+                Inis.RemoveAt(i);
+                return true;
             }
         }
 
-        result = new Ini { Path = iniName };
-        Inis.Add(result);
-        return true;
+        return false;
+    }
+
+    public bool TryGetIni(string iniName, out Ini result)
+    {
+        foreach (var ini in Inis)
+        {
+            if (ini.Path.Equals(iniName, StringComparison.OrdinalIgnoreCase))
+            {
+                result = ini;
+                return true;
+            }
+        }
+
+        result = default;
+        return false;
     }
 }
 
