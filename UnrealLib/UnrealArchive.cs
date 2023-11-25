@@ -3,68 +3,106 @@ using System.IO;
 
 namespace UnrealLib;
 
-// This class is pretty ugly. Added for some unreleased version of IBPatcher? Can't remember...
-// Would like to remove. See what I should scavenge
-
-public enum UnrealArchiveState : byte
+// Look into genericizing this class! How to handle default values? Assume the 0th element represents a 'None' state
+// public abstract class ErrorHelper<T> where T : Enum
+public abstract class ErrorHelper
 {
-    Unloaded = 0,
-    // FailedInit,
-    Loaded
+    public UnrealArchiveError Error { get; protected set; } = UnrealArchiveError.None;
+    public bool HasError => Error is not UnrealArchiveError.None;
+    public virtual string ErrorString => GetString(Error);
+
+    public void SetError(UnrealArchiveError error) => Error = error;
+    public static string GetString(UnrealArchiveError error) => error switch
+    {
+        // Generic
+        UnrealArchiveError.None => "No error.",
+        UnrealArchiveError.PathInvalid => "File path is invalid.",
+        UnrealArchiveError.PathNonexistent => "File path does not exist.",
+        UnrealArchiveError.PathNotReadable => "File path does not allow reading.",
+        UnrealArchiveError.FailedOverwrite => "Failed to overwrite the output path. Is the file or folder contents in use?",
+        UnrealArchiveError.ParseFailed => "Failed to parse the file.",
+
+        // Coalesced
+        UnrealArchiveError.InvalidFolder => "Not a valid Coalesced folder.",
+        UnrealArchiveError.UnexpectedGame => "Coalesced file does not match the requested game.",
+        UnrealArchiveError.DecryptionFailed => "Failed to decrypt the Coalesced file.",
+    };
 }
 
-/// <summary>
-/// Base class for Unreal Archive types. Implements common functionality.
-/// </summary>
-public abstract class UnrealArchive : IDisposable
+public abstract class UnrealArchive : ErrorHelper, IDisposable
 {
-    protected bool _disposed = false;
+    protected FileInfo? _fileInfo;
+    private bool _disposed;
+
+    public bool Modified { get; set; } = false;
+
+    public string Filename => _fileInfo.Name;
+    public string QualifiedPath => _fileInfo.FullName;
+    public string ParentPath => _fileInfo.DirectoryName;
+    public bool PathIsDirectory => (_fileInfo.Attributes & FileAttributes.Directory) != 0;
+    
     
     /// <summary>
-    /// Archive filename.
+    /// Parameterless constructor for when not working with filestreams.
     /// </summary>
-    public string Filename { get; protected set; }
+    public UnrealArchive() { }
 
-    /// <summary>
-    /// An absolute, platform-specific archive path.
-    /// </summary>
-    public string QualifiedPath { get; protected set; }
-
-    /// <summary>
-    /// An absolute, platform-specific path to this archive's parent directory.
-    /// </summary>
-    public string QualifiedParentPath { get; protected set; }
-
-    /// <summary>
-    /// A string message describing this archive's latest error. If empty, this archive has no errors.
-    /// </summary>
-    public string ErrorContext { get; protected set; } = string.Empty;
-
-    /// <summary>
-    /// Indicates whether the archive has been modified since opening.
-    /// </summary>
-    public bool Modified { get; set; }
-
-    public UnrealArchiveState State { get; protected set; } = UnrealArchiveState.Unloaded;
-    
-    public bool HasError => ErrorContext.Length > 0;
-
-    public abstract bool Open(string? path = null);
-    public abstract bool Save(string? path = null);
-    public abstract bool Init();
-    public abstract void Dispose();
-
-    #region Helpers
-
-    protected void InitPathInfo(string filePath)
+    public UnrealArchive(string filePath)
     {
-        Filename = Path.GetFileName(filePath);
-        QualifiedPath = Path.GetFullPath(filePath);
-        QualifiedParentPath = QualifiedPath[..^Filename.Length];
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            SetError(UnrealArchiveError.PathInvalid);
+            return;
+        }
+
+        _fileInfo = new FileInfo(filePath);
+
+        try
+        {
+            // -1 indicates no attributes, meaning the path does not exist
+            if ((int)_fileInfo.Attributes == -1)
+            {
+                SetError(UnrealArchiveError.PathNonexistent);
+            }
+        }
+        catch
+        {
+            // If we've caught an exception, that means that path was malformed
+            SetError(UnrealArchiveError.PathInvalid);
+        }
     }
 
-    // public string GetWindowsPath() => Globals.GetWindowsPath(QualifiedPath);
-    // public string GetUnixPath() => Globals.GetUnixPath(QualifiedPath);
+    public abstract bool Load();
+    public abstract bool Save(string? path = null);
+    public void Dispose()
+    {
+        if (_disposed) return;
 
-    #endregion
+        DisposeUnmanagedResources();
+        GC.SuppressFinalize(this);
+
+        _disposed = true;
+    }
+
+    public virtual void DisposeUnmanagedResources() { }
+}
+
+public enum UnrealArchiveError : byte
+{
+    // Generic
+    None,
+    PathInvalid,
+    PathNonexistent,
+    PathNotReadable,
+
+    FailedOverwrite,
+
+    ParseFailed,
+
+    // UPK
+
+    // Coalesced
+    InvalidFolder,
+    UnexpectedGame,
+    DecryptionFailed
 }

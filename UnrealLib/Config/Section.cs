@@ -28,22 +28,18 @@ public class Section : ISerializable
     public void UpdateProperty(string line)
     {
         // Do not process empty lines
-        if (string.IsNullOrWhiteSpace(line))
-            return;
+        if (string.IsNullOrWhiteSpace(line)) return;
 
         string[] sub = line.Split('=', 2, StringSplitOptions.TrimEntries);
 
-        // If line did not contain a '=' char or the value is empty, return early
-        if (sub.Length != 2 || sub[1].Length == 0)
-            return;
-
         string key = sub[0];
-        string value = sub[1];
+        string value = sub.Length == 2 ? sub[1] : "";
 
         // Take a property line i.e. 'Key=Value' and do things with it
         // Use special prefixes to denote action: '!', '+', '.', '-'.
-        // See https://docs.unrealengine.com/5.0/en-US/configuration-files-in-unreal-engine/
+        // See https://docs.unrealengine.com/5.3/en-US/configuration-files-in-unreal-engine/
 
+        // Get a copy of the property without the special character if one was used
         var prop = key[0] switch
         {
             '!' or '-' or '+' or '.' => new Property(key[1..], value),
@@ -55,7 +51,7 @@ public class Section : ISerializable
             // Remove all instances of the key
             // Suited for emptying arrays / removing all keys of the same name
             case '!':
-                Properties.RemoveAll(p => p.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+                Properties.RemoveAll(p => p.Key.Equals(prop.Key, StringComparison.OrdinalIgnoreCase));
                 break;
 
             // Remove matching key/value
@@ -67,8 +63,7 @@ public class Section : ISerializable
             // Add if not already present
             // Suited for idk. Seems pretty useless to me
             case '+':
-                if (!TryGetProperty(prop.Key, out _))
-                    Properties.Add(prop);
+                if (!TryGetProperty(prop.Key, out _)) Properties.Add(prop);
                 break;
 
             // Add regardless
@@ -85,6 +80,17 @@ public class Section : ISerializable
     // @TODO: Using generics over explicit method overloads.
     // This allows for nicer design in some areas but sacrificing 'type'.Parse() for Convert.ChangeType().
     // What are the performance implications? BENCHMARK ME.
+
+    public T GetValue<T>(string key)
+    {
+        if (TryGetProperty(key, out var prop))
+        {
+            Globals.TryConvert(prop.Value, out T value);
+            return value;
+        }
+
+        return default;
+    }
 
     public bool GetValue<T>(string key, out T value)
     {

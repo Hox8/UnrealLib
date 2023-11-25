@@ -9,24 +9,20 @@ public static class Globals
     public const uint PackageTagSwapped = 0xC1832A9E;
 
     // Do not change the order of these elements!
-    public static readonly string[] Languages = { "INT", "BRA", "CHN", "DEU", "DUT", "ESN", "FRA", "ITA", "JPN", "KOR", "POR", "RUS", "SWE", "ESM", "IND", "THA" };
+    public static ReadOnlySpan<string> Languages => new string[] { "INT", "BRA", "CHN", "DEU", "DUT", "ESN", "FRA", "ITA", "JPN", "KOR", "POR", "RUS", "SWE", "ESM", "IND", "THA" };
 
-    public static string GameToString(Game game) => game switch
+    public static string GetString(Game game, bool shorthand) => game switch
     {
+        Game.IB1 when shorthand => "IB1",
+        Game.IB2 when shorthand => "IB2",
+        Game.IB3 when shorthand => "IB3",
+        Game.Vote when shorthand => "VOTE",
+
         Game.IB1 => "Infinity Blade I",
         Game.IB2 => "Infinity Blade II",
         Game.IB3 => "Infinity Blade III",
         Game.Vote => "VOTE!!!",
-        Game.All => "All",
-        _ => "Unknown"
-    };
 
-    public static string GameToStringShorthand(Game game) => game switch
-    {
-        Game.IB1 => "IB1",
-        Game.IB2 => "IB2",
-        Game.IB3 => "IB3",
-        Game.Vote => "VOTE!!!",
         Game.All => "All",
         _ => "Unknown"
     };
@@ -34,13 +30,11 @@ public static class Globals
     /// <summary>
     /// Returns a list of all languages applicable to the passed <see cref="Game"/>.
     /// </summary>
-    public static Span<string> GetLanguages(Game game) => game switch
+    public static ReadOnlySpan<string> GetLanguages(Game game) => game switch
     {
-        // Position of languages within the array take advantage of each game's supporting range.
-
-        Game.IB3 => Languages.AsSpan(),
-        Game.Vote => Languages.AsSpan(0, 1),
-        _ => Languages.AsSpan(0, Languages.Length - 3)
+        Game.IB3 => Languages,          // IB3 supports all 16 languages
+        Game.Vote => Languages[0..1],   // Vote only supports American English
+        _ => Languages[..^3]            // IB1 and IB2 do not support ESM, IND, and THA
     };
 
     /// <summary>

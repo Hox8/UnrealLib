@@ -6,6 +6,8 @@
 // @Big TODO
 // Serializer options only apply when writing text inis. Binary files do NOT take into account any serializer options!
 
+// @TODO: Enforce unique sections should not be optional as inis should adhere to the official spec.
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,6 +25,10 @@ public class Ini : ISerializable
 
     public Section Globals = new();
     public bool HasDuplicateSections = false;
+
+    // ERROR
+    public string Context;
+    public string Description;
 
     /// <summary>
     /// Parameterless constructor. Used internally by UnrealStream serializer.
@@ -52,10 +58,12 @@ public class Ini : ISerializable
             if (line[0] == '[' && line[^1] == ']')
             {
                 // Add new section to Sections
-                if (!TryAddSection(line[1..^1], out curSection) && enforceUniqueSections)
+                if (!TryAddSection(line[1..^1], out curSection))
                 {
                     HasDuplicateSections = true;
-                    return;
+                    Context = curSection.Name;
+                    
+                    if (enforceUniqueSections) return;
                 }
                 continue;
             }

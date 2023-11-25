@@ -280,5 +280,6 @@ public class UnrealStream : Stream
         }
     }
 
+    public new void Dispose() => Dispose(true);
     #endregion
 }

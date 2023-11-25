@@ -10,10 +10,11 @@
 
 	<PropertyGroup>
 		<!-- Comment this out if unneeded to save ~75kb -->
-		<DefineConstants>WITH_COALESCED_FOLDER_SUPPORT</DefineConstants>
+		<!-- @TODO: This is painful to work with. Find a better method. -->
+		<DefineConstants>WITH_COALESCED_EDITOR</DefineConstants>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'${OS}' == 'OSX' Or '${OS}' == 'Unix'">
+	<PropertyGroup Condition=" '$(OS)' != 'Windows_NT' ">
 		<DefineConstants>UNIX</DefineConstants>
 	</PropertyGroup>
 

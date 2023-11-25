@@ -13,14 +13,11 @@ namespace UnrealLib;
 
 public class UnrealPackage : UnrealArchive
 {
-    private UnrealStream Stream;
+    public UnrealStream Stream;
     internal FPackageFileSummary Summary;
     private List<FNameEntry> Names;
     private List<FObjectImport> Imports;
     private List<FObjectExport> Exports;
-    // private List<List<int>> Depends;
-
-    // private Dictionary<string, FNameEntry> NameMap;
 
     public int EngineVersion => Summary.EngineVersion;
     public int LicenseeVersion => Summary.LicenseeVersion;
@@ -66,28 +63,21 @@ public class UnrealPackage : UnrealArchive
     }
 
     #endregion
-    
+
     #region Constructors
 
     /// <summary>
     /// Parameterless constructor. Use for delayed initialization.
     /// </summary>
-    public UnrealPackage() { }
-
-    /// <summary>
-    /// Constructs an <see cref="UnrealPackage"/> and initializes it from the passed filepath.
-    /// </summary>
-    public UnrealPackage(string filePath, bool delayInit = false)
+    public UnrealPackage(string filePath, bool delayInitialization) : base(filePath)
     {
-        InitPathInfo(filePath);
-        
-        if (!delayInit)
+        if (!delayInitialization)
         {
-            Open();
+            Load();
         }
     }
 
-    public UnrealPackage(byte[] buffer, bool resizable = false)
+    public UnrealPackage(byte[] buffer, bool resizable = false) : base()
     {
         Stream = new(buffer, resizable);
     }
@@ -98,45 +88,13 @@ public class UnrealPackage : UnrealArchive
 
     public void Write(ReadOnlySpan<byte> value) => Stream.Write(value);
     
-    public sealed override bool Open(string? path = null)
+    public sealed override bool Load()
     {
-        // If this UPK has an already-open stream, we should dispose of it before re-assigning it
-        Stream?.Dispose();
-
-        if (path is not null)
-        {
-            InitPathInfo(path);
-        }
+        if (HasError) return false;
 
         Stream = new UnrealStream(QualifiedPath);
 
-        return Init();
-    }
-
-    public sealed override bool Save(string? path = null)
-    {
-        Stream.Position = 0;
-        /*if (path is not null) throw new NotImplementedException();
-
-        Stream.StartSaving();
-
-        Stream.Position = 0;
-        Stream.Serialize(ref Summary);
-        Stream.Serialize(ref Names, Summary.NameCount);
-        Stream.Serialize(ref Imports, Summary.ImportCount);
-        Stream.Serialize(ref Exports, Summary.ExportCount);
-
-        // Depends map, thumbnail, guids etc.
-        // UObject data*/
-
-        Dispose();
-        return false;
-    }
-
-    public sealed override bool Init()
-    {
-        if (Stream is null) Open();
-
+        // @TODO: Put this in its own method
         try
         {
             Stream.Position = 0;
@@ -158,25 +116,39 @@ public class UnrealPackage : UnrealArchive
             {
                 exports[i].Link(this, i);
             }
-
-            State = UnrealArchiveState.Loaded;
-            return true;
         }
         catch
         {
+            SetError(UnrealArchiveError.ParseFailed);
             return false;
         }
+
+        return true;
     }
 
-    public override void Dispose()
+    public sealed override bool Save(string? path = null)
     {
-        if (_disposed) return;
-        _disposed = true;
-        
+        throw new NotImplementedException();
+        Stream.Position = 0;
+        /*if (path is not null) throw new NotImplementedException();
+
+        Stream.StartSaving();
+
+        Stream.Position = 0;
+        Stream.Serialize(ref Summary);
+        Stream.Serialize(ref Names, Summary.NameCount);
+        Stream.Serialize(ref Imports, Summary.ImportCount);
+        Stream.Serialize(ref Exports, Summary.ExportCount);
+
+        // Depends map, thumbnail, guids etc.
+        // UObject data*/
+
+        return false;
+    }
+
+    public override void DisposeUnmanagedResources()
+    {
         Stream.Dispose();
-        State = UnrealArchiveState.Unloaded;
-        
-        GC.SuppressFinalize(this);
     }
 
     #endregion
