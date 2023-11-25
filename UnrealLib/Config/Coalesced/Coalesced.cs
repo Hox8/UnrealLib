@@ -12,6 +12,7 @@ public class Coalesced : UnrealArchive
     public List<Ini> Inis = new();
 
     public CoalescedOptions Options = new();
+    private const string HelperName = "ibhelper";
 
     public Coalesced(string path, Game game = Game.Unknown, bool delayInitialization = false) : base(path)
     {
@@ -75,7 +76,7 @@ public class Coalesced : UnrealArchive
         else
         {
             // Try read game from helper file within folder
-            if ((Game = ParseGameFromHelper(Path.Combine(QualifiedPath, "ibhelper"))) == Game.Unknown)
+            if ((Game = ParseGameFromHelper(Path.Combine(QualifiedPath, HelperName))) == Game.Unknown)
             {
                 SetError(UnrealArchiveError.InvalidFolder);
                 return false;
@@ -151,7 +152,9 @@ public class Coalesced : UnrealArchive
             }
 
             // Write Game to disk so we know how to re-encrypt the folder later
-            File.WriteAllBytes(Path.Combine(Path.ChangeExtension(QualifiedPath, null), "ibhelper"), new byte[] { (byte)_decryptedWith });
+            string helperPath = Path.Combine(Path.ChangeExtension(QualifiedPath, null), HelperName);
+            File.WriteAllBytes(helperPath, [(byte)_decryptedWith]);
+            File.SetAttributes(helperPath, FileAttributes.Hidden);
         }
 #endif
 

@@ -6,9 +6,7 @@
 		<Nullable>enable</Nullable>
 		<IsAotCompatible>true</IsAotCompatible>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-	</PropertyGroup>
 
-	<PropertyGroup>
 		<!-- Comment this out if unneeded to save ~75kb -->
 		<!-- @TODO: This is painful to work with. Find a better method. -->
 		<DefineConstants>WITH_COALESCED_EDITOR</DefineConstants>
