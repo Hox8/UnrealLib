@@ -21,7 +21,6 @@ public class Ini : ISerializable
     public string Path;
     public List<Section> Sections = new();
     public IniOptions Options = new();
-    public bool Modified = false;
 
     public Section Globals = new();
     public bool HasDuplicateSections = false;

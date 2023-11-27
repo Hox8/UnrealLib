@@ -3,16 +3,34 @@ using System.IO;
 
 namespace UnrealLib;
 
-// Look into genericizing this class! How to handle default values? Assume the 0th element represents a 'None' state
-// public abstract class ErrorHelper<T> where T : Enum
-public abstract class ErrorHelper
+public abstract class ErrorHelper<T> where T : Enum
 {
-    public UnrealArchiveError Error { get; protected set; } = UnrealArchiveError.None;
-    public bool HasError => Error is not UnrealArchiveError.None;
-    public virtual string ErrorString => GetString(Error);
+    public T Error { get; protected set; }
+    public abstract bool HasError { get; }
 
-    public void SetError(UnrealArchiveError error) => Error = error;
-    public static string GetString(UnrealArchiveError error) => error switch
+    public string ErrorString => GetString(Error);
+    public void SetError(T error) => Error = error;
+    public abstract string GetString(T error);
+}
+
+public abstract class UnrealArchive : ErrorHelper<UnrealArchiveError>, IDisposable
+{
+    protected FileInfo? _fileInfo;
+    private bool _disposed;
+    public readonly long OriginalLength;
+
+    public string Filename => _fileInfo.Name;
+    public string QualifiedPath => _fileInfo.FullName;
+    public string ParentPath => _fileInfo.DirectoryName;
+    public bool PathIsDirectory => (_fileInfo.Attributes & FileAttributes.Directory) != 0;
+    
+    /// <summary>
+    /// The length of the file, in bytes. Any file changes must be saved to disk before calling this for accurate result.
+    /// </summary>
+    public long Length => _fileInfo.Length;
+
+    public override bool HasError => Error is not UnrealArchiveError.None;
+    public override string GetString(UnrealArchiveError error) => error switch
     {
         // Generic
         UnrealArchiveError.None => "No error.",
@@ -27,21 +45,7 @@ public abstract class ErrorHelper
         UnrealArchiveError.UnexpectedGame => "Coalesced file does not match the requested game.",
         UnrealArchiveError.DecryptionFailed => "Failed to decrypt the Coalesced file.",
     };
-}
 
-public abstract class UnrealArchive : ErrorHelper, IDisposable
-{
-    protected FileInfo? _fileInfo;
-    private bool _disposed;
-
-    public bool Modified { get; set; } = false;
-
-    public string Filename => _fileInfo.Name;
-    public string QualifiedPath => _fileInfo.FullName;
-    public string ParentPath => _fileInfo.DirectoryName;
-    public bool PathIsDirectory => (_fileInfo.Attributes & FileAttributes.Directory) != 0;
-    
-    
     /// <summary>
     /// Parameterless constructor for when not working with filestreams.
     /// </summary>
@@ -70,10 +74,12 @@ public abstract class UnrealArchive : ErrorHelper, IDisposable
             // If we've caught an exception, that means that path was malformed
             SetError(UnrealArchiveError.PathInvalid);
         }
+
+        OriginalLength = _fileInfo.Length;
     }
 
     public abstract bool Load();
-    public abstract bool Save(string? path = null);
+    public abstract long Save(string? path = null); // Returns bytes written
     public void Dispose()
     {
         if (_disposed) return;

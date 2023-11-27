@@ -60,14 +60,13 @@ public class Coalesced : UnrealArchive
                     return false;
                 }
 
-#if !WITH_COALESCED_EDITOR
                 // Error if the Coalesced file belongs to a different game
                 if (Game is not Game.Unknown && Game != _decryptedWith)
                 {
                     SetError(UnrealArchiveError.UnexpectedGame);
                     return false;
                 }
-#endif
+
                 Game = _decryptedWith;
             }
         }
@@ -100,9 +99,9 @@ public class Coalesced : UnrealArchive
         return true;
     }
 
-    public override bool Save(string? path = null)
+    public override long Save(string? path = null)
     {
-        if (HasError) return false;
+        if (HasError) return -1;
 
         var fileInfo = new FileInfo(path ?? QualifiedPath);
 
@@ -122,6 +121,7 @@ public class Coalesced : UnrealArchive
             }
 
             File.WriteAllBytes(fileInfo.FullName, stream.ToArray());
+            return stream.Length;
         }
 #if WITH_COALESCED_EDITOR
         // Save Coalesced folder
@@ -137,7 +137,7 @@ public class Coalesced : UnrealArchive
             catch
             {
                 SetError(UnrealArchiveError.FailedOverwrite);
-                return false;
+                return -1;
             }
 
             var iniOptions = new IniOptions(Options);
@@ -155,10 +155,11 @@ public class Coalesced : UnrealArchive
             string helperPath = Path.Combine(Path.ChangeExtension(QualifiedPath, null), HelperName);
             File.WriteAllBytes(helperPath, [(byte)_decryptedWith]);
             File.SetAttributes(helperPath, FileAttributes.Hidden);
+            return 0;
         }
+#else
+        return -1;
 #endif
-
-        return true;
     }
 
     #region Helpers

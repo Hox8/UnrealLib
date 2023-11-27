@@ -126,24 +126,10 @@ public class UnrealPackage : UnrealArchive
         return true;
     }
 
-    public sealed override bool Save(string? path = null)
+    public sealed override long Save(string? path = null)
     {
-        throw new NotImplementedException();
         Stream.Position = 0;
-        /*if (path is not null) throw new NotImplementedException();
-
-        Stream.StartSaving();
-
-        Stream.Position = 0;
-        Stream.Serialize(ref Summary);
-        Stream.Serialize(ref Names, Summary.NameCount);
-        Stream.Serialize(ref Imports, Summary.ImportCount);
-        Stream.Serialize(ref Exports, Summary.ExportCount);
-
-        // Depends map, thumbnail, guids etc.
-        // UObject data*/
-
-        return false;
+        return Stream.Length;
     }
 
     public override void DisposeUnmanagedResources()
