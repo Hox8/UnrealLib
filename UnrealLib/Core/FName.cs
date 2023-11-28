@@ -15,14 +15,14 @@ public class FName : ISerializable
 
     public void Serialize(UnrealStream stream)
     {
-        if (stream.IsLoading)
-        {
+        // if (stream.IsLoading)
+        // {
             stream.Serialize(ref Index);
-        }
-        else
-        {
-            stream.Serialize(ref Name.SerializedIndex);
-        }
+        // }
+        // else
+        // {
+        //     stream.Serialize(ref Name.SerializedIndex);
+        // }
         
         stream.Serialize(ref Instance);
     }
