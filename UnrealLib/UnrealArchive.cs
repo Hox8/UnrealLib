@@ -23,11 +23,6 @@ public abstract class UnrealArchive : ErrorHelper<UnrealArchiveError>, IDisposab
     public string QualifiedPath => _fileInfo.FullName;
     public string ParentPath => _fileInfo.DirectoryName;
     public bool PathIsDirectory => (_fileInfo.Attributes & FileAttributes.Directory) != 0;
-    
-    /// <summary>
-    /// The length of the file, in bytes. Any file changes must be saved to disk before calling this for accurate result.
-    /// </summary>
-    public long Length => _fileInfo.Length;
 
     public override bool HasError => Error is not UnrealArchiveError.None;
     public override string GetString(UnrealArchiveError error) => error switch
