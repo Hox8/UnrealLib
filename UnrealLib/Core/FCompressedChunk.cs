@@ -1,8 +1,8 @@
 ﻿namespace UnrealLib.Core;
 
-public struct FCompressedChunk
+public readonly struct FCompressedChunk
 {
-    private int UncompressedOffset, UncompressedSize, CompressedOffset, CompressedSize;
+    public readonly int UncompressedOffset, UncompressedSize, CompressedOffset, CompressedSize;
 
     public override string ToString() =>
         $"Compressed: {CompressedOffset}/{CompressedSize}, Uncompressed: {UncompressedOffset}/{UncompressedSize}";

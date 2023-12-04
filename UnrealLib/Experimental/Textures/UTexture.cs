@@ -1,192 +1,202 @@
-﻿//using UnrealLib.Core;
+﻿using UnrealLib.Core;
 
-//namespace UnrealLib.Experimental.Textures
-//{
-//    public class UTexture(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : USurface(stream, pkg, export)
-//    {
-//        #region public enums
+namespace UnrealLib.Experimental.Textures
+{
+    public class UTexture(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : USurface(stream, pkg, export)
+    {
+        FUntypedBulkData SourceArt;
 
-//        public enum TextureCompressionSettings
-//        {
-//            TC_Default,
-//            TC_Normalmap,
-//            TC_Displacementmap,
-//            TC_NormalmapAlpha,
-//            TC_Grayscale,
-//            TC_HighDynamicRange,
-//            TC_OneBitAlpha,
-//            TC_NormalmapUncompressed,
-//            TC_NormalmapBC5,
-//            TC_OneBitMonochrome,
-//            TC_SimpleLightmapModification,
-//            TC_VectorDisplacementmap
-//        };
+        #region Public enums
 
-//        public enum TextureFilter
-//        {
-//            TF_Nearest,
-//            TF_Linear
-//        };
+        public enum TextureCompressionSettings
+        {
+            Default,
+            Normalmap,
+            Displacementmap,
+            NormalmapAlpha,
+            Grayscale,
+            HighDynamicRange,
+            OneBitAlpha,
+            NormalmapUncompressed,
+            NormalmapBC5,
+            OneBitMonochrome,
+            SimpleLightmapModification,
+            VectorDisplacementmap
+        };
 
-//        public enum TextureAddress
-//        {
-//            TA_Wrap,
-//            TA_Clamp,
-//            TA_Mirror
-//        };
+        public enum TextureFilter
+        {
+            Nearest,
+            Linear
+        };
 
-//        public enum TextureGroup
-//        {
-//            TEXTUREGROUP_World,
-//            TEXTUREGROUP_WorldNormalMap,
-//            TEXTUREGROUP_WorldSpecular,
-//            TEXTUREGROUP_Character,
-//            TEXTUREGROUP_CharacterNormalMap,
-//            TEXTUREGROUP_CharacterSpecular,
-//            TEXTUREGROUP_Weapon,
-//            TEXTUREGROUP_WeaponNormalMap,
-//            TEXTUREGROUP_WeaponSpecular,
-//            TEXTUREGROUP_Vehicle,
-//            TEXTUREGROUP_VehicleNormalMap,
-//            TEXTUREGROUP_VehicleSpecular,
-//            TEXTUREGROUP_Cinematic,
-//            TEXTUREGROUP_Effects,
-//            TEXTUREGROUP_EffectsNotFiltered,
-//            TEXTUREGROUP_Skybox,
-//            TEXTUREGROUP_UI,
-//            TEXTUREGROUP_Lightmap,
-//            TEXTUREGROUP_RenderTarget,
-//            TEXTUREGROUP_MobileFlattened,
-//            TEXTUREGROUP_ProcBuilding_Face,
-//            TEXTUREGROUP_ProcBuilding_LightMap,
-//            TEXTUREGROUP_Shadowmap,
-//            TEXTUREGROUP_ColorLookupTable,
-//            TEXTUREGROUP_Terrain_Heightmap,
-//            TEXTUREGROUP_Terrain_Weightmap,
-//            TEXTUREGROUP_ImageBasedReflection,
-//            TEXTUREGROUP_Bokeh
-//        };
+        public enum TextureAddress
+        {
+            Wrap,
+            Clamp,
+            Mirror
+        };
 
-//        public enum TextureMipGenSettings
-//        {
-//            // default for the "texture"
-//            TMGS_FromTextureGroup,
-//            // 2x2 average, default for the "texture group"
-//            TMGS_SimpleAverage,
-//            // 8x8 with sharpening: 0=no sharpening but better quality which is softer, 1..little, 5=medium, 10=extreme
-//            TMGS_Sharpen0,
-//            TMGS_Sharpen1,
-//            TMGS_Sharpen2,
-//            TMGS_Sharpen3,
-//            TMGS_Sharpen4,
-//            TMGS_Sharpen5,
-//            TMGS_Sharpen6,
-//            TMGS_Sharpen7,
-//            TMGS_Sharpen8,
-//            TMGS_Sharpen9,
-//            TMGS_Sharpen10,
-//            TMGS_NoMipmaps,
-//            // Do not touch existing mip chain as it contains generated data
-//            TMGS_LeaveExistingMips,
-//            // blur further (useful for image based reflections)
-//            TMGS_Blur1,
-//            TMGS_Blur2,
-//            TMGS_Blur3,
-//            TMGS_Blur4,
-//            TMGS_Blur5
-//        };
+        public enum TextureGroup
+        {
+            World,
+            WorldNormalMap,
+            WorldSpecular,
+            Character,
+            CharacterNormalMap,
+            CharacterSpecular,
+            Weapon,
+            WeaponNormalMap,
+            WeaponSpecular,
+            Vehicle,
+            VehicleNormalMap,
+            VehicleSpecular,
+            Cinematic,
+            Effects,
+            EffectsNotFiltered,
+            Skybox,
+            UI,
+            Lightmap,
+            RenderTarget,
+            MobileFlattened,
+            ProcBuilding_Face,
+            ProcBuilding_LightMap,
+            Shadowmap,
+            ColorLookupTable,
+            Terrain_Heightmap,
+            Terrain_Weightmap,
+            ImageBasedReflection,
+            Bokeh
+        };
 
-//        public enum ETextureMipCount
-//        {
-//            TMC_ResidentMips,
-//            TMC_AllMips,
-//            TMC_AllMipsBiased,
-//        };
+        public enum TextureMipGenSettings
+        {
+            // default for the "texture"
+            FromTextureGroup,
+            // 2x2 average, default for the "texture group"
+            SimpleAverage,
+            // 8x8 with sharpening: 0=no sharpening but better quality which is softer, 1..little, 5=medium, 10=extreme
+            Sharpen0,
+            Sharpen1,
+            Sharpen2,
+            Sharpen3,
+            Sharpen4,
+            Sharpen5,
+            Sharpen6,
+            Sharpen7,
+            Sharpen8,
+            Sharpen9,
+            Sharpen10,
+            NoMipmaps,
+            // Do not touch existing mip chain as it contains generated data
+            LeaveExistingMips,
+            // blur further (useful for image based reflections)
+            Blur1,
+            Blur2,
+            Blur3,
+            Blur4,
+            Blur5
+        };
 
-//        #endregion
+        public enum ETextureMipCount
+        {
+            ResidentMips,
+            AllMips,
+            AllMipsBiased,
+        };
 
-//        #region Properties
+        #endregion
 
-//        public bool SRGB;
-//        public bool RGBE;
+        #region Properties
 
-//        public float[] UnpackMin, UnpackMax;
+        public bool SRGB;
+        public bool RGBE;
 
-//        // UntypedBulkData_Mirror SourceArt
+        public float[] UnpackMin = new float[4] { 0.0f, 0.0f, 0.0f, 0.0f };
+        public float[] UnpackMax = new float[4] { 1.0f, 1.0f, 1.0f, 1.0f };
 
-//        public bool bIsSourceArtUncompressed;
+        // UntypedBulkDaMirror SourceArt
 
-//        public bool CompressionNoAlpha;
-//        public bool CompressionNone;
-//        public bool CompressionNoMipmaps;
-//        public bool CompressionFullDynamicRange;
-//        public bool DeferCompression;
-//        public bool NeverStream;
+        public bool bIsSourceArtUncompressed;
 
-//        /** When TRUE, the alpha channel of mip-maps and the base image are dithered for smooth LOD transitions. */
-//        public bool bDitherMipMapAlpha;
+        public bool CompressionNoAlpha;
+        public bool CompressionNone;
+        public bool CompressionNoMipmaps;
+        public bool CompressionFullDynamicRange;
+        public bool DeferCompression;
+        public bool NeverStream;
 
-//        /** If TRUE, the color border pixels are preserved by mipmap generation.  One flag per color channel. */
-//        public bool bPreserveBorderR;
-//        public bool bPreserveBorderG;
-//        public bool bPreserveBorderB;
-//        public bool bPreserveBorderA;
+        /** When TRUE, the alpha channel of mip-maps and the base image are dithered for smooth LOD transitions. */
+        public bool bDitherMipMapAlpha;
 
-//        /** If TRUE, the RHI texture will be created using TexCreate_NoTiling */
-//        public /*const*/ bool bNoTiling;
+        /** If TRUE, the color border pixels are preserved by mipmap generation.  One flag per color channel. */
+        public bool bPreserveBorderR;
+        public bool bPreserveBorderG;
+        public bool bPreserveBorderB;
+        public bool bPreserveBorderA;
 
-//        /** For DXT1 textures, setting this will cause the texture to be twice the size, but better looking, on iPhone */
-//        public bool bForcePVRTC4;
+        /** If TRUE, the RHI texture will be created using TexCreate_NoTiling */
+        public /*const*/ bool bNoTiling;
 
-//        public TextureCompressionSettings CompressionSettings;
+        /** For DXT1 textures, setting this will cause the texture to be twice the size, but better looking, on iPhone */
+        public bool bForcePVRTC4;
 
-//        /** The texture filtering mode to use when sampling this texture. */
-//        public TextureFilter Filter;
+        public TextureCompressionSettings CompressionSettings = TextureCompressionSettings.Default;
 
-//        /** Texture group this texture belongs to for LOD bias */
-//        public TextureGroup LODGroup;
+        /** The texture filtering mode to use when sampling this texture. */
+        public TextureFilter Filter = TextureFilter.Nearest;
 
-//        /** A bias to the index of the top mip level to use. */
-//        public int LODBias;
+        /** Texture group this texture belongs to for LOD bias */
+        public TextureGroup LODGroup = TextureGroup.World;
 
-//        /** Number of mip-levels to use for cinematic quality. */
-//        public int NumCinematicMipLevels;
+        /** A bias to the index of the top mip level to use. */
+        public int LODBias = 0;
 
-//        /** Path to the resource used to construct this texture */
-//        public string SourceFilePath;
-//        /** Date/Time-stamp of the file from the last import */
-//        public string SourceFileTimestamp;
+        /** Number of mip-levels to use for cinematic quality. */
+        public int NumCinematicMipLevels = 0;
 
-//        /** The texture's resource. */
-//        // var native const pointer Resource{FTextureResource};
+        /** Path to the resource used to construct this texture */
+        public string SourceFilePath;
+        /** Date/Time-stamp of the file from the last import */
+        public string SourceFileTimestamp;
 
-//        /** Unique ID for this material, used for caching during distributed lighting */
-//        private FGuid LightingGuid;
+        /** The texture's resource. */
+        // var native const pointer Resource{FTextureResource};
 
-//        /** Static texture brightness adjustment (scales HSV value.)  (Non-destructive; Requires texture source art to be available.) */
-//        public float AdjustBrightness;
+        /** Unique ID for this material, used for caching during distributed lighting */
+        private FGuid LightingGuid;
 
-//        /** Static texture curve adjustment (raises HSV value to the specified power.)  (Non-destructive; Requires texture source art to be available.)  */
-//        public float AdjustBrightnessCurve;
+        /** Static texture brightness adjustment (scales HSV value.)  (Non-destructive; Requires texture source art to be available.) */
+        public float AdjustBrightness;
 
-//        /** Static texture "vibrance" adjustment (0 - 1) (HSV saturation algorithm adjustment.)  (Non-destructive; Requires texture source art to be available.)  */
-//        public float AdjustVibrance;
+        /** Static texture curve adjustment (raises HSV value to the specified power.)  (Non-destructive; Requires texture source art to be available.)  */
+        public float AdjustBrightnessCurve;
 
-//        /** Static texture saturation adjustment (scales HSV saturation.)  (Non-destructive; Requires texture source art to be available.)  */
-//        public float AdjustSaturation;
+        /** Static texture "vibrance" adjustment (0 - 1) (HSV saturation algorithm adjustment.)  (Non-destructive; Requires texture source art to be available.)  */
+        public float AdjustVibrance;
 
-//        /** Static texture RGB curve adjustment (raises linear-space RGB color to the specified power.)  (Non-destructive; Requires texture source art to be available.)  */
-//        public float AdjustRGBCurve;
+        /** Static texture saturation adjustment (scales HSV saturation.)  (Non-destructive; Requires texture source art to be available.)  */
+        public float AdjustSaturation;
 
-//        /** Static texture hue adjustment (0 - 360) (offsets HSV hue by value in degrees.)  (Non-destructive; Requires texture source art to be available.)  */
-//        public float AdjustHue;
+        /** Static texture RGB curve adjustment (raises linear-space RGB color to the specified power.)  (Non-destructive; Requires texture source art to be available.)  */
+        public float AdjustRGBCurve;
 
-//        /** Internal LOD bias already applied by the texture format (eg TC_NormalMapUncompressed). Used to adjust MinLODMipCount and MaxLODMipCount in CalculateLODBias */
-//        public int InternalFormatLODBias;
+        /** Static texture hue adjustment (0 - 360) (offsets HSV hue by value in degrees.)  (Non-destructive; Requires texture source art to be available.)  */
+        public float AdjustHue;
 
-//        /** Per asset specific setting to define the mip-map generation properties like sharpening and kernel size. */
-//        public TextureMipGenSettings MipGenSettings;
+        /** Internal LOD bias already applied by the texture format (eg NormalMapUncompressed). Used to adjust MinLODMipCount and MaxLODMipCount in CalculateLODBias */
+        public int InternalFormatLODBias;
 
-//        #endregion
-//    }
-//}
+        /** Per asset specific setting to define the mip-map generation properties like sharpening and kernel size. */
+        public TextureMipGenSettings MipGenSettings = TextureMipGenSettings.FromTextureGroup;
+
+        #endregion
+
+        public override void Serialize(UnrealStream stream)
+        {
+            base.Serialize(stream);
+
+            stream.Serialize(ref SourceArt);
+        }
+    }
+}

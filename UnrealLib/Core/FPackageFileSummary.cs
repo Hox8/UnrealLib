@@ -38,7 +38,7 @@ public class FPackageFileSummary : ISerializable
     private List<FCompressedChunk> CompressedChunks;
     private int PackageSource;
 
-    private List<string> AdditionalCookedPackages;
+    internal List<string> AdditionalPackagesToCook;
 
     private FTextureAllocations TextureAllocations;
 
@@ -82,7 +82,7 @@ public class FPackageFileSummary : ISerializable
         stream.Serialize(ref CompressedChunks);
         stream.Serialize(ref PackageSource);
         
-        stream.Serialize(ref AdditionalCookedPackages);
+        stream.Serialize(ref AdditionalPackagesToCook);
         stream.Serialize(ref TextureAllocations);
     }
 }

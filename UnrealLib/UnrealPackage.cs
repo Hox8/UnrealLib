@@ -1,8 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using UnrealLib.Core;
+using UnrealLib.Experimental.Sound;
+using UnrealLib.Experimental.Textures;
+using UnrealLib.Experimental.Textures.PowerVR;
+using UnrealLib.Experimental.Textures.TGA;
 using UnrealLib.Experimental.UnObj;
 
 namespace UnrealLib;
@@ -11,18 +16,23 @@ namespace UnrealLib;
 // This will likely be faster when we're dealing with lots of name comparisons e.g. dealing with UProperties
 // A lazy-load approach where it's cached on first access sounds good
 
+// Infinity Blade II is weird.
+// Latest version uses engine version 864, but serializes like it's still at least 851.
+// For this we'll need the ability to override package version. Also, the UnrealStream class sucks.
+
 public class UnrealPackage : UnrealArchive
 {
     public UnrealStream Stream;
     internal FPackageFileSummary Summary;
     private List<FNameEntry> Names;
-    private List<FObjectImport> Imports;
-    private List<FObjectExport> Exports;
+    public List<FObjectImport> Imports;
+    public List<FObjectExport> Exports;
 
     public int EngineVersion => Summary.EngineVersion;
     public int LicenseeVersion => Summary.LicenseeVersion;
     public int EngineBuild => Summary.EngineBuild;
     public int CookerVersion => Summary.CookerVersion;
+    public List<string> AdditionalPackagesToCook => Summary.AdditionalPackagesToCook;
 
     #region Accessors
     
@@ -30,6 +40,9 @@ public class UnrealPackage : UnrealArchive
     /// Returns the <see cref="FNameEntry?"/> at the specified index.
     /// </summary>
     public FNameEntry? GetName(int index) => index <= Names.Count ? Names[index] : null;
+    public FNameEntry? GetName(FName name) => GetName(name.Index);
+    public string GetString(int index) => GetName(index)?.Name ?? "";
+    public string GetString(FName name) => GetName(name)?.Name ?? "";
     
     /// <inheritdoc cref="GetObject"/>
     public FObjectExport? GetExport(int index) => (FObjectExport?)GetObject(index);
@@ -299,16 +312,64 @@ public class UnrealPackage : UnrealArchive
     {
         Stream.Position = export.SerializedOffset;
 
-        var obj = export.Class?.Name.ToString() switch
+        UObject obj = export.Class?.Name.ToString() switch
         {
             "Field"     => new UField(Stream, this, export),
             "Function"  => new UFunction(Stream, this, export),
             "State"     => new UState(Stream, this, export),
             "Struct"    => new UStruct(Stream, this, export),
-            _           => new UClass(Stream, this, export)     // UClass if class ref is null
+            "Texture2D" => new UTexture2D(Stream, this, export),
+            "LightMapTexture2D" => new ULightMapTexture2D(Stream, this, export),
+            "SoundNodeWave" => new SoundNodeWave(Stream, this, export),
+            null           => new UClass(Stream, this, export),     // UClass if class ref is null
+            _ => throw new NotImplementedException($"'{export.Class.Name}' is not implemented")
         };
 
         obj.Serialize(Stream);
         return obj;
+    }
+
+    public void TextureExtractDEBUG()
+    {
+        string rootDirectory = ParentPath;
+        Dictionary<string, UnrealStream> TFCs = [];
+        List<UTexture2D> Textures = [];
+
+        // Cache whatever object points to Engine.Texture2D
+        if (FindObject("Engine.Texture2D") is not FObjectResource resource) throw new Exception();
+
+        foreach (var export in Exports)
+        {
+            // If export is not a UTexture2D, continue
+            if (export.Class != resource) continue;
+
+            var texture = (UTexture2D)GetObjectDEBUG(export);
+
+            if (!TFCs.TryGetValue(texture.TextureFileCacheName.ToString(), out var tfc))
+            {
+                tfc = new UnrealStream(Path.Combine(rootDirectory, texture.TextureFileCacheName.Name + ".tfc"), FileMode.Open, FileAccess.Read);
+                TFCs.Add(texture.TextureFileCacheName.ToString(), tfc);
+            }
+
+            Textures.Add(texture);
+        }
+
+        foreach (var texture in Textures)
+        {
+            Console.WriteLine($"{texture.FullName} - {texture.TextureFileCacheName}.tfc");
+
+            foreach (var mip in texture.CachedPVRTCMips)
+            {
+                if (!mip.Data.ContainsData) continue;
+
+                mip.Data.ReadData(TFCs[texture.TextureFileCacheName.ToString()]);
+
+                var decompressed = PVR.Decompress(mip.Data.Data, mip.SizeX, mip.SizeX, texture.Format is Enums.Textures.PixelFormat.DXT1 && !texture.bForcePVRTC4);
+                TGA.Save(decompressed.ToArray(), mip.SizeX, mip.SizeY, 32, $"D:\\{texture.ObjectName}.tga");
+
+                // We only want the first valid mip
+                break;
+            }
+        }
     }
 }

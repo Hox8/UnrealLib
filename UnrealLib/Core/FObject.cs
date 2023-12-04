@@ -17,12 +17,13 @@ public abstract class FObjectResource
     internal FName ObjectName;
     
     // Transient
-    internal int SerializedIndex;
-    internal int SerializedOffset;
-    internal FObjectResource? Outer;
+    public int SerializedIndex { get; protected set; }
+    public int SerializedOffset { get; protected set; }
+    public FObjectResource? Outer { get; private set; }
     
     // Properties
-    public string Name => ObjectName.Name.Name;
+    public string Name => ObjectName.Name.Name; // @TODO: This was incorrectly set on some lightmap exports in 00_P_AsiaForest
+    public string FullName => this.ToString();
     
     public virtual void Link(UnrealPackage pkg, int idx)
     {
@@ -53,8 +54,8 @@ public abstract class FObjectResource
 public class FObjectImport : FObjectResource, ISerializable
 {
     // Serialized
-    internal FName ClassPackage;
-    internal FName ClassName;
+    public FName ClassPackage;
+    public FName ClassName;
 
     public void Serialize(UnrealStream stream)
     {
@@ -105,10 +106,10 @@ public class FObjectExport : FObjectResource, ISerializable
 
     #region Transient
 
-    internal FObjectResource Class;
-    internal FObjectResource? Super;
-    internal FObjectResource? Archetype;
-    internal UObject? Object;
+    public FObjectResource Class { get; private set; }
+    public FObjectResource? Super { get; private set; }
+    public FObjectResource? Archetype { get; private set; }
+    public UObject? Object { get; private set; }
 
     #endregion
 

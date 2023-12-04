@@ -60,18 +60,19 @@ namespace UnrealLib.Experimental.UnObj.DefaultProperties
                 case NAME_FloatProperty: stream.Serialize(ref Value.Float); break;
                 case NAME_StrProperty: stream.Serialize(ref Value.String); break;
                 case NAME_ObjectProperty: stream.Serialize(ref Value.Int); break;
-                case NAME_NameProperty: stream.Serialize(ref Value.Name); break;
+                case NAME_NameProperty: stream.Serialize(ref Value.Name); Value.Name.Name = pkg.GetName(Value.Name.Index); break;
 
                 case NAME_ByteProperty: TargetName.Serialize(stream, pkg); stream.Serialize(ref Value.Name); break;
                 case NAME_StructProperty: TargetName.Serialize(stream, pkg); SerializeStruct(); break;
                 case NAME_ArrayProperty: TargetName.Serialize(stream, pkg); SerializeArray(); break;
 
-                default: throw new NotImplementedException($"Unrecognized default property type {Type}");
+                default: throw new NotImplementedException($"Unrecognized default property type '{Type}'");
             }
         }
 
         private void SerializeArray() => throw new NotImplementedException();
         private void SerializeStruct() => throw new NotImplementedException();
+        public override string ToString() => Name.ToString();
     }
 
     [StructLayout(LayoutKind.Explicit)]

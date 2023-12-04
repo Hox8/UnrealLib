@@ -24,6 +24,7 @@ public class Ini : ISerializable
 
     public Section Globals = new();
     public bool HasDuplicateSections = false;
+    public bool Modified = false;
 
     // ERROR
     public string Context;
@@ -131,11 +132,22 @@ public class Ini : ISerializable
 
     public bool TryGetSection(string sectionName, out Section? result)
     {
+        bool clearProperties = false;
+
+        // Special. Clears section's properties
+        if (sectionName.StartsWith('!'))
+        {
+            sectionName = sectionName[1..];
+            clearProperties = true;
+        }
+
         foreach (var section in Sections)
         {
             if (section.Name.Equals(sectionName, StringComparison.OrdinalIgnoreCase))
             {
                 result = section;
+                if (clearProperties) result.Properties.Clear();
+
                 return true;
             }
         }

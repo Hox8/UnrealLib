@@ -463,12 +463,12 @@ public static class PVR
         }
     }
 
-    private static unsafe void Decompress(Span<byte> compressedData, Span<Pixel32> decompressedData, int width, int height, bool do2Bit)
+    private static unsafe void Decompress(ReadOnlySpan<byte> compressedData, Span<Pixel32> decompressedData, int width, int height, bool do2Bit)
     {
         int wordWidth = do2Bit ? 8 : 4;
         const int wordHeight = 4;
 
-        Span<uint> wordMembers = MemoryMarshal.Cast<byte, uint>(compressedData);
+        ReadOnlySpan<uint> wordMembers = MemoryMarshal.Cast<byte, uint>(compressedData);
 
         // Calculate number of words
         int i32NumXWords = width / wordWidth;
@@ -523,14 +523,14 @@ public static class PVR
     #endregion
 
     /// <summary>
-    /// Decompresses a headless PVRTC-encoded texture to an RGBA888 buffer.
+    /// Decompresses a headless PVRTC-encoded texture to an RGBA8888 buffer.
     /// </summary>
     /// <param name="compressedData">The PVRTC image data. Must NOT contain a header.</param>
     /// <param name="width">Width of the image, in pixels.</param>
     /// <param name="height">Height of the image, in pixels.</param>
     /// <param name="do2Bit">Whether the PVRTC texture is encoded using 2 bits per pixel (true) or 4 bits per pixel (false).</param>
     /// <returns>A byte span containing the decompressed RGBA8888 image data.</returns>
-    public static Span<byte> Decompress(Span<byte> compressedData, int width, int height, bool do2Bit)
+    public static Span<byte> Decompress(ReadOnlySpan<byte> compressedData, int width, int height, bool do2Bit)
     {
         // Bring dimensions up to the minimum supported if any fall short   - Textures cannot be compressed if below these resolutions?
         // width = Math.Max(width, do2Bit ? 16 : 8);

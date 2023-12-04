@@ -20,6 +20,9 @@ public class UObject(UnrealStream stream, UnrealPackage pkg, FObjectExport expor
     protected UnrealPackage _pkg = pkg;
     protected FObjectExport _export = export;
 
+    public string FullName => _export.ToString();
+    public string ObjectName => _export.Name;
+
     public virtual void Serialize(UnrealStream stream)
     {
         if (stream.IsLoading)
@@ -41,16 +44,20 @@ public class UObject(UnrealStream stream, UnrealPackage pkg, FObjectExport expor
         _export = export;
     }
 
-    public void SerializeScriptProperties(UnrealStream stream, UnrealPackage pkg)
+    // Until this is overridden explicitly within another class, all properties will be
+    // placed in the generic DefaultProperties list, A.K.A the "I don't want to know about
+    // this but don't want to toss it out" basket.
+    public virtual void SerializeScriptProperties(UnrealStream stream, UnrealPackage pkg)
     {
         if (stream.IsLoading)
         {
             DefaultProperties = new();
-            FPropertyTag Tag = new();
-
+            
             while (true)
             {
+                FPropertyTag Tag = new();
                 Tag.Serialize(stream, pkg);
+
                 if (Tag.Name == "None") return;
 
                 DefaultProperties.Add(Tag);

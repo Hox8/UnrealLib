@@ -7,6 +7,7 @@ public static class Globals
 {
     public const uint PackageTag = 0x9E2A83C1;
     public const uint PackageTagSwapped = 0xC1832A9E;
+    public const int CompressionChunkSize = 131072;
 
     // Do not change the order of these elements!
     public static ReadOnlySpan<string> Languages => new string[] { "INT", "BRA", "CHN", "DEU", "DUT", "ESN", "FRA", "ITA", "JPN", "KOR", "POR", "RUS", "SWE", "ESM", "IND", "THA" };
