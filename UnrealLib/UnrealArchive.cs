@@ -126,19 +126,19 @@ public class UnrealArchive : Stream, IDisposable
     /// <summary>
     /// When true, strings will always be serialized as UTF-16.
     /// </summary>
-    public bool ForceUTF16 { get; internal set; } = false;
+    public bool ForceUTF16 { get; set; } = false;
 
     /// <summary>
     /// Influences whether data is serialized from or to a data source.
     /// </summary>
-    public bool IsLoading { get; protected set; } = true;
+    public bool IsLoading { get; private set; } = true;
 
     #endregion
 
     #region File IO and stat tracking
 
     protected FileInfo FileInfo;
-    protected long InitialLength;
+    public long InitialLength { get; protected set; }
 
     #endregion
 
@@ -491,4 +491,14 @@ public class UnrealArchive : Stream, IDisposable
     {
         _buffer.Dispose();
     }
+}
+
+public abstract class ErrorHelper<T> where T : Enum
+{
+    public T Error { get; protected set; }
+    public abstract bool HasError { get; }
+
+    public string ErrorString => GetString(Error);
+    public void SetError(T error) => Error = error;
+    public abstract string GetString(T error);
 }
