@@ -1,156 +1,145 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Text;
+﻿using System.Text;
 using UnrealLib.Enums;
 using UnrealLib.Experimental.UnObj;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
 
-using PackageIdx = Int32;
-
+/// <summary>
+/// Base class for UObject types.
+/// </summary>
 public abstract class FObjectResource
 {
-    // Serialized
-    internal PackageIdx OuterIndex;
-    internal FName ObjectName;
-    
-    // Transient
-    public int SerializedIndex { get; protected set; }
-    public int SerializedOffset { get; protected set; }
-    public FObjectResource? Outer { get; private set; }
-    
-    // Properties
-    public string Name => ObjectName.Name.Name; // @TODO: This was incorrectly set on some lightmap exports in 00_P_AsiaForest
-    public string FullName => this.ToString();
-    
-    public virtual void Link(UnrealPackage pkg, int idx)
-    {
-        SerializedIndex = idx;
-        
-        // Link Outer object
-        Outer = pkg.GetObject(OuterIndex);
-        
-        // Link names
-        ObjectName.Name = pkg.GetName(ObjectName.Index);
-    }
-    
-    public override string ToString()
-    {
-        var sb = new StringBuilder(ObjectName.ToString());
+    #region Serialized members
 
-        FObjectResource obj = this;
-        while (obj.Outer is not null)
+    internal int OuterIndex;            // Object index of this resource's outer resource
+    internal FName ObjectName;         // Name of the UObject represented by this resource
+
+    #endregion
+
+    #region Transient members
+ 
+    public FObjectResource? Outer { get; protected set; }   // This resource's Outer
+    public UnrealPackage Package { get; protected set; }    // The UnrealPackage this export belongs to
+#if TRACK_OBJECT_USAGE
+    public readonly List<FObjectResource> Users = [];              // List to track objects directly referencing this resource
+    public readonly List<FObjectResource> ClassUsers = [];         // List of objects referencing this object as a class
+#endif
+
+#endregion
+
+    #region Accessors
+
+    public string GetName() => ObjectName.Name;    // Name of just this object resource
+    public string GetFullName()
+    {
+        var sb = new StringBuilder(GetName());
+
+        for (FObjectResource outer = Outer; outer is not null; outer = outer.Outer)
         {
-            sb.Insert(0, $"{obj.Outer.ObjectName}.");
-            obj = obj.Outer;
+            sb.Insert(0, $"{outer.GetName()}.");
         }
 
         return sb.ToString();
     }
-}
+    public override string ToString() => GetFullName();
 
-public class FObjectImport : FObjectResource, ISerializable
-{
-    // Serialized
-    public FName ClassPackage;
-    public FName ClassName;
+    #endregion
 
-    public void Serialize(UnrealStream stream)
+    public virtual void Link(UnrealPackage Ar)
     {
-        SerializedOffset = (int)stream.Position;
-        
-        stream.Serialize(ref ClassPackage);
-        stream.Serialize(ref ClassName);
-        stream.Serialize(ref OuterIndex);
-        stream.Serialize(ref ObjectName);
-    }
+        Package = Ar;
 
-    public override void Link(UnrealPackage pkg, int idx)
-    {
-        base.Link(pkg, idx);
-        
-        // Link names
-        ClassPackage.Name = pkg.GetName(ClassPackage.Index);
-        ClassName.Name = pkg.GetName(ClassName.Index);
-        
-        // Let ObjectName know that this import is using it
-        ObjectName.Name.Register(this);
+        ObjectName.NameEntry.Users.Add(this);
+
+        Outer = Ar.GetObject(OuterIndex);
+
+#if TRACK_OBJECT_USAGE
+        Outer?.Users.Add(this);
+#endif
     }
 }
 
-public class FObjectExport : FObjectResource, ISerializable
+/// <summary>
+/// UObject resource type for objects referenced by this package, but contained within another.
+/// </summary>
+public sealed class FObjectImport : FObjectResource, ISerializable
 {
-    #region Serialized
+    #region Serialized members
 
-    /// <summary>Serialized index pointing to this UObject's class in the import/export table.</summary>
-    internal PackageIdx ClassIndex;
-    /// <summary>Serialized index pointing to this UObject's parent object in the import/export table.</summary>
-    internal PackageIdx SuperIndex;
-    /// <summary>Serialized index pointing to this UObject's template object in the import/export table.</summary>
-    internal PackageIdx ArchetypeIndex;
-    /// <summary>Flags describing this UObject.</summary>
+    internal FName ClassPackage;
+    internal FName ClassName;
+
+    #endregion
+
+    public void Serialize(UnrealArchive Ar)
+    {
+        Ar.Serialize(ref ClassPackage);
+        Ar.Serialize(ref ClassName);
+        Ar.Serialize(ref OuterIndex);
+        Ar.Serialize(ref ObjectName);
+    }
+}
+
+/// <summary>
+/// UObject resource type for objects contained within this package.
+/// </summary>
+public sealed class FObjectExport : FObjectResource, ISerializable
+{
+    #region Serialized members
+
+    internal int ClassIndex;
+    internal int SuperIndex;
+    internal int ArchetypeIndex;
+
     internal ObjectFlags ObjectFlags;
-    /// <summary>The length of this UObject's data after serializing to disk.</summary>
-    public int SerialSize;
-    /// <summary>The file offset where this UObject's data is serialized.</summary>
-    public int SerialOffset;
-    /// <summary>Flags describing this FObjectExport.</summary>
+    internal int SerialSize;
+    internal int SerialOffset;
+
     internal ExportFlags ExportFlags;
-    internal List<int> GenerationNetObjectCount;
-    internal FGuid PackageGuid;
+    internal int[] GenerationNetObjectCount;
+    internal FGuid Guid;
     internal PackageFlags PackageFlags;
 
     #endregion
 
-    #region Transient
+    #region Transient members
 
-    public FObjectResource Class { get; private set; }
+    public FObjectResource? Class { get; private set; }
     public FObjectResource? Super { get; private set; }
     public FObjectResource? Archetype { get; private set; }
     public UObject? Object { get; private set; }
 
     #endregion
 
-    public void Serialize(UnrealStream stream)
+    public void Serialize(UnrealArchive Ar)
     {
-        SerializedOffset = (int)stream.Position;
-        
-        stream.Serialize(ref ClassIndex);
-        stream.Serialize(ref SuperIndex);
-        stream.Serialize(ref OuterIndex);
-        stream.Serialize(ref ObjectName);
-        stream.Serialize(ref ArchetypeIndex);
-        stream.Serialize(ref ObjectFlags);
-        
-        stream.Serialize(ref SerialSize);
-        stream.Serialize(ref SerialOffset);
-        
-        stream.Serialize(ref ExportFlags);
-        stream.Serialize(ref GenerationNetObjectCount);
-        stream.Serialize(ref PackageGuid);
-        stream.Serialize(ref PackageFlags);
+        Ar.Serialize(ref ClassIndex);
+        Ar.Serialize(ref SuperIndex);
+        Ar.Serialize(ref OuterIndex);
+        Ar.Serialize(ref ObjectName);
+        Ar.Serialize(ref ArchetypeIndex);
+
+        Ar.Serialize(ref ObjectFlags);
+        Ar.Serialize(ref SerialSize);
+        Ar.Serialize(ref SerialOffset);
+
+        Ar.Serialize(ref ExportFlags);
+        Ar.Serialize(ref GenerationNetObjectCount);
+        Ar.Serialize(ref Guid);
+        Ar.Serialize(ref PackageFlags);
     }
 
-    public override void Link(UnrealPackage pkg, int idx)
+    public override void Link(UnrealPackage Ar)
     {
-        base.Link(pkg, idx);
+        base.Link(Ar);
 
-        // Link Class object
-        // If ClassIndex is 0, set Class to UClass. Class reference should NEVER be null.
-        // PKG needs to cache common names like UClass and many more so we can do this without repeated lookups
-        // @TODO
-        // Class = ClassIndex == 0 ? null : pkg.GetObject(ClassIndex);
-        Class = pkg.GetObject(ClassIndex);
+        Class = Ar.GetObject(ClassIndex);
+        Super = Ar.GetObject(SuperIndex);
+        Archetype = Ar.GetObject(ArchetypeIndex);
 
-        // Link Super object
-        Super = pkg.GetObject(SuperIndex);
-
-        // Link Archetype object
-        Archetype = pkg.GetObject(ArchetypeIndex);
-        
-        // Let ObjectName know that this export is using it
-        ObjectName.Name.Register(this);
+#if TRACK_OBJECT_USAGE
+        Class?.ClassUsers.Add(this);
+#endif
     }
 }

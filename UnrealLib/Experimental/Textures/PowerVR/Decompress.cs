@@ -137,39 +137,39 @@ public static class PVR
 
     #region Private methods
 
+    private static readonly int[] RepVals = [0, 3, 5, 8];
+
     private static int GetModulationValues(uint[,] modValues, uint[,] modModes, uint xPos, uint yPos, bool do2Bit)
     {
         if (!do2Bit) return (int)modValues[xPos, yPos];
 
-        var repVals = new int[] { 0, 3, 5, 8 };
-
         // extract the modulation value. If a simple encoding
         if (modModes[xPos, yPos] == 0)
         {
-            return repVals[modValues[xPos, yPos]];
+            return RepVals[modValues[xPos, yPos]];
         }
 
         // if this is a stored value
         if (((xPos ^ yPos) & 1) == 0)
         {
-            return repVals[modValues[xPos, yPos]];
+            return RepVals[modValues[xPos, yPos]];
         }
 
         // else average from the neighbours
         // if H&V interpolation...
         if (modModes[xPos, yPos] == 1)
         {
-            return (repVals[modValues[xPos, yPos - 1]] + repVals[modValues[xPos, yPos + 1]] +
-                    repVals[modValues[xPos - 1, yPos]] + repVals[modValues[xPos + 1, yPos]] + 2) / 4;
+            return (RepVals[modValues[xPos, yPos - 1]] + RepVals[modValues[xPos, yPos + 1]] +
+                    RepVals[modValues[xPos - 1, yPos]] + RepVals[modValues[xPos + 1, yPos]] + 2) / 4;
         }
         // else if H-Only
         if (modModes[xPos, yPos] == 2)
         {
-            return (repVals[modValues[xPos - 1, yPos]] + repVals[modValues[xPos + 1, yPos]] + 1) / 2;
+            return (RepVals[modValues[xPos - 1, yPos]] + RepVals[modValues[xPos + 1, yPos]] + 1) / 2;
         }
 
         // else it's V-Only
-        return (repVals[modValues[xPos, yPos - 1]] + repVals[modValues[xPos, yPos + 1]] + 1) / 2;
+        return (RepVals[modValues[xPos, yPos - 1]] + RepVals[modValues[xPos, yPos + 1]] + 1) / 2;
     }
 
     private static void InterpolateColors(Pixel32 p, Pixel32 q, Pixel32 r, Pixel32 s, Span<Pixel128S> pixel, bool do2Bit)
@@ -412,19 +412,17 @@ public static class PVR
         }
     }
 
+    // 4bpp only needs 16 values, but 2bpp needs 32, so rather than wasting processor time we just statically allocate 32.
+    private static readonly Pixel128S[] upscaledColorA = new Pixel128S[32];
+    private static readonly Pixel128S[] upscaledColorB = new Pixel128S[32];
+
+    // 4bpp only needs 8*8 values, but 2bpp needs 16*8, so rather than wasting processor time we just statically allocate 16*8.
+    private static readonly uint[,] modulationValues = new uint[16, 8];
+    // Only 2bpp needs this.
+    private static readonly uint[,] modulationModes = new uint[16, 8];
+
     private static void GetDecompressedPixels(PVRTCWord P, PVRTCWord Q, PVRTCWord R, PVRTCWord S, Span<Pixel32> colorData, bool do2Bit)
     {
-        // 4bpp only needs 8*8 values, but 2bpp needs 16*8, so rather than wasting processor time we just statically allocate 16*8.
-        var modulationValues = new uint[16, 8];
-
-        // Only 2bpp needs this.
-        var modulationModes = new uint[16, 8];
-
-        // 4bpp only needs 16 values, but 2bpp needs 32, so rather than wasting processor time we just statically allocate 32.
-        Span<Pixel128S> upscaledColorBuffer = GC.AllocateUninitializedArray<Pixel128S>(64); // One allocation; slice result
-        var upscaledColorA = upscaledColorBuffer.Slice(0, 32);
-        var upscaledColorB = upscaledColorBuffer.Slice(32, 32);
-
         int wordWidth = do2Bit ? 8 : 4;
         int wordHeight = 4;
 
@@ -453,15 +451,15 @@ public static class PVR
                 int index = do2Bit ? y * wordWidth + x : y + x * wordHeight;
                 int index2 = y * wordWidth + x;
 
-                colorData[index] = new Pixel32(
-                        (byte)((upscaledColorA[index2].Red * (8 - mod) + upscaledColorB[index2].Red * mod) / 8),
-                        (byte)((upscaledColorA[index2].Green * (8 - mod) + upscaledColorB[index2].Green * mod) / 8),
-                        (byte)((upscaledColorA[index2].Blue * (8 - mod) + upscaledColorB[index2].Blue * mod) / 8),
-                        punchThroughAlpha ? (byte)0 : (byte)((upscaledColorA[index2].Alpha * (8 - mod) + upscaledColorB[index2].Alpha * mod) / 8)
-                    );
+                colorData[index].Red = (byte)((upscaledColorA[index2].Red * (8 - mod) + upscaledColorB[index2].Red * mod) / 8);
+                colorData[index].Green = (byte)((upscaledColorA[index2].Green * (8 - mod) + upscaledColorB[index2].Green * mod) / 8);
+                colorData[index].Blue = (byte)((upscaledColorA[index2].Blue * (8 - mod) + upscaledColorB[index2].Blue * mod) / 8);
+                colorData[index].Alpha = punchThroughAlpha ? (byte)0 : (byte)((upscaledColorA[index2].Alpha * (8 - mod) + upscaledColorB[index2].Alpha * mod) / 8);
             }
         }
     }
+
+    private static readonly int[] wordOffsets = new int[4];
 
     private static unsafe void Decompress(ReadOnlySpan<byte> compressedData, Span<Pixel32> decompressedData, int width, int height, bool do2Bit)
     {
@@ -494,13 +492,10 @@ public static class PVR
                 indices.S[1] = WrapWordIndex(i32NumYWords, wordY + 1);
 
                 // Work out the offsets into the twiddle structs, multiply by two as there are two members per word.
-                var wordOffsets = new int[4]
-                {
-                    TwiddleUV(i32NumXWords, i32NumYWords, indices.P[0], indices.P[1]) * 2,
-                    TwiddleUV(i32NumXWords, i32NumYWords, indices.Q[0], indices.Q[1]) * 2,
-                    TwiddleUV(i32NumXWords, i32NumYWords, indices.R[0], indices.R[1]) * 2,
-                    TwiddleUV(i32NumXWords, i32NumYWords, indices.S[0], indices.S[1]) * 2
-                };
+                wordOffsets[0] = TwiddleUV(i32NumXWords, i32NumYWords, indices.P[0], indices.P[1]) * 2;
+                wordOffsets[1] = TwiddleUV(i32NumXWords, i32NumYWords, indices.Q[0], indices.Q[1]) * 2;
+                wordOffsets[2] = TwiddleUV(i32NumXWords, i32NumYWords, indices.R[0], indices.R[1]) * 2;
+                wordOffsets[3] = TwiddleUV(i32NumXWords, i32NumYWords, indices.S[0], indices.S[1]) * 2;
 
                 // Access individual elements to fill out PVRTCWord
                 PVRTCWord p, q, r, s;

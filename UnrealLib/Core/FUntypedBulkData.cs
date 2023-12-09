@@ -1,54 +1,55 @@
-﻿using System;
+﻿using Ionic.Zlib;
+using System;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
 using UnrealLib.Enums;
 using UnrealLib.Interfaces;
-using Ionic.Zlib;
 
 namespace UnrealLib.Core;
 
 public class FUntypedBulkData : ISerializable
 {
-    private BulkDataFlags BulkDataFlags;
-    // Uncompressed size.
-    private int ElementCount;
-    // Compressed size.
-    private int BulkDataSizeOnDisk;
-    private int BulkDataOffsetInFile;
+    #region Serialized members
 
-    //private BulkDataFlags SavedBulkDataFlags;
-    //private int SavedSavedElementCount;
-    //private int SavedBulkDataOffsetInFile;
-    //private int SavedBulkDataSizeOnDisk;
+    /// <summary>Serialized flags for bulk data.</summary>
+    internal BulkDataFlags BulkDataFlags = BulkDataFlags.None;
+    /// <summary>Uncompressed size?</summary>
+    internal int ElementCount;
+    /// <summary>Size of bulk data on disk.</summary>
+    internal int BulkDataSizeOnDisk;
+    /// <summary>Offset of bulk data within file.</summary>
+    internal int BulkDataOffsetInFile;
 
     private byte[] BulkData;
 
-    // Use an array pool?
+    #endregion
 
     #region Accessors
 
+    public bool IsUnused => (BulkDataFlags & BulkDataFlags.Unused) != 0;
     public bool IsStoredInSeparateFile => (BulkDataFlags & BulkDataFlags.StoreInSeparateFile) != 0;
     public bool IsStoredCompressed => (BulkDataFlags & BulkDataFlags.SerializeCompressed) != 0;
+    public bool ZLibCompressed => (BulkDataFlags & BulkDataFlags.SerializeCompressedZLIB) != 0;
     public bool ContainsData => BulkDataSizeOnDisk > 0;
     public int Count => ElementCount;
-    public ReadOnlySpan<byte> Data => BulkData;
+    public ReadOnlySpan<byte> DataView => BulkData;
+    public Span<byte> Data => BulkData;
 
     #endregion
 
-    public void Serialize(UnrealStream stream)
+    public void Serialize(UnrealArchive Ar)
     {
-        Debug.Assert(stream.IsLoading);
+        Debug.Assert(Ar.IsLoading);
 
-        stream.Serialize(ref BulkDataFlags);
-        stream.Serialize(ref ElementCount);
-        stream.Serialize(ref BulkDataSizeOnDisk);
-        stream.Serialize(ref BulkDataOffsetInFile);
+        Ar.Serialize(ref BulkDataFlags);
+        Ar.Serialize(ref ElementCount);
+        Ar.Serialize(ref BulkDataSizeOnDisk);
+        Ar.Serialize(ref BulkDataOffsetInFile);
 
-        // If we contain inlined data, skip over it. We can read it in later if needed.
-        if (ContainsData && !IsStoredInSeparateFile)
+        // Skip over any inlined bulk data.
+        if (!IsStoredInSeparateFile)
         {
-            stream.Position += BulkDataSizeOnDisk;
+            Ar.Position += BulkDataSizeOnDisk;
         }
     }
 
@@ -58,71 +59,74 @@ public class FUntypedBulkData : ISerializable
         ElementCount = 0;
     }
 
-    public void ReadData(UnrealStream stream)
+    public void ReadData(UnrealArchive Ar)
     {
         // 1. Read data / allocate uninitialized array
-        // 2. Decompress data if compressed (ZLIB, LZX etc)
+        // 2. Decompress data if ZLib-compressed
 
-        stream.Position = BulkDataOffsetInFile;
+        if (!ContainsData) return;
 
+        Ar.Position = BulkDataOffsetInFile;
+
+        // Allocate buffer for uncompressed data.
         BulkData = GC.AllocateUninitializedArray<byte>(ElementCount);
 
         if (IsStoredCompressed)
         {
-            if ((BulkDataFlags & BulkDataFlags.SerializeCompressedZLIB) != 0)
-            {
-                DecompressZLib(stream);
-            }
-            else
+            if (!ZLibCompressed)
             {
                 // iOS only supports ZLib. I have no plans to support other forms of compression.
                 throw new NotImplementedException("ZLib is the only supported compression method");
             }
+            
+            DecompressZLib(Ar);
         }
         else
         {
-            stream.ReadExactly(BulkData);
+            Ar.ReadExactly(BulkData);
             return;
         }
     }
 
-    private void DecompressZLib(UnrealStream inputStream)
+    // CRUDE ZLib impl.
+    // Very inefficient; look into pooling and make this method static so as to not lock behind FUntypedBulkData
+    private void DecompressZLib(UnrealArchive Ar)
     {
         int packageTag = 0, chunkSize = 0;
         int compressedSize = 0, uncompressedSize = 0;
 
         // Read in package tag
-        inputStream.Serialize(ref packageTag);
+        Ar.Serialize(ref packageTag);
         if ((uint)packageTag != Globals.PackageTag)
         {
             throw new Exception("Invalid package tag!");
         }
 
         // Read in chunk size? Can this change?
-        inputStream.Serialize(ref chunkSize);
+        Ar.Serialize(ref chunkSize);
         if (chunkSize != Globals.CompressionChunkSize)
         {
             throw new Exception("Unexpected compression chunk size!");
         }
 
         // Read in [un]compressed sizes
-        inputStream.Serialize(ref compressedSize);
-        inputStream.Serialize(ref uncompressedSize);
+        Ar.Serialize(ref compressedSize);
+        Ar.Serialize(ref uncompressedSize);
 
         // Determine chunk count based on uncompressed size
         int totalChunkCount = (uncompressedSize + Globals.CompressionChunkSize - 1) / Globals.CompressionChunkSize;
 
         // Allocate and read totalChunkCount compression chunk infos
         var chunks = new FCompressedChunkInfo[totalChunkCount];
-        inputStream.ReadExactly(MemoryMarshal.Cast<FCompressedChunkInfo, byte>(chunks));
+        Ar.ReadExactly(MemoryMarshal.Cast<FCompressedChunkInfo, byte>(chunks));
 
         // Read in and inflate all chunks
         int bytesRead = 0;
         for (int i = 0; i < chunks.Length; i++)
         {
             // This works, but not how I want it to. @TODO
-            using var zlibstream = new ZlibStream(inputStream, CompressionMode.Decompress, true);
-            zlibstream.BufferSize = chunks[i].CompressedSize;   // Read() reads BufferSize bytes regardless of length passed
+            using var zlibstream = new ZlibStream(Ar, CompressionMode.Decompress, true);
+            zlibstream.BufferSize = chunks[i].CompressedSize;   // Read() reads BufferSize bytes regardless of length passed?
 
             bytesRead += zlibstream.Read(BulkData.AsSpan(bytesRead, chunks[i].UncompressedSize));
         }

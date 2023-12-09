@@ -1,59 +1,59 @@
-﻿using System;
-using UnrealLib.Core;
+﻿using UnrealLib.Core;
 
 namespace UnrealLib.Experimental.UnObj;
 
-public class UStruct(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : UField(stream, pkg, export)
+public class UStruct(FObjectExport export) : UField(export)
 {
-    protected FObjectExport? SuperStruct;
-    protected FObjectExport? Children;
+    #region Serialized members
+
+    protected int SuperIndex;
+    protected int ChildIndex;
     protected int ScriptBytecodeSize;
     protected int ScriptStorageSize;
     protected byte[] Script;
 
-    public override void Serialize(UnrealStream stream)
+    #endregion
+
+    #region Transient members
+
+    protected FObjectExport? SuperStruct { get; private set; }
+    protected FObjectExport? Children { get; private set; }
+
+    #endregion
+
+    public override void Serialize()
     {
-        int superStructIndex = SuperStruct?.SerializedIndex ?? 0;
-        int childIndex = Children?.SerializedIndex ?? 0;
+        base.Serialize();
 
-        base.Serialize(stream);
+        Ar.Serialize(ref SuperIndex);
+        Ar.Serialize(ref ChildIndex);
 
-        stream.Serialize(ref superStructIndex);
-        stream.Serialize(ref childIndex);
+        Ar.Serialize(ref ScriptBytecodeSize);
+        Ar.Serialize(ref ScriptStorageSize);
 
-        stream.Serialize(ref ScriptBytecodeSize);
-        stream.Serialize(ref ScriptStorageSize);
-
-        if (stream.IsLoading)
+        if (Ar.IsLoading)
         {
-            Script = GC.AllocateUninitializedArray<byte>(ScriptStorageSize);
-            stream.ReadExactly(Script);
+            Script = new byte[ScriptStorageSize];
+            Ar.ReadExactly(Script);
         }
         else
         {
-            stream.Write(Script);
+            Ar.Write(Script);
         }
 
-        // MOVE INTO LINK METHOD (or really just outside the base serialize method)
-        if (stream.IsLoading)
+        // Link
+
+        if (Ar.IsLoading)
         {
-            if (_pkg.GetExport(superStructIndex) is FObjectExport superStruct)
+            if (Ar.GetExport(SuperIndex) is FObjectExport superStruct)
             {
                 SuperStruct = superStruct;
             }
-#if DEBUG
-            else if (_pkg.GetExport(superStructIndex) is FObjectImport)
-                throw new Exception();
-#endif
 
-            if (_pkg.GetExport(childIndex) is FObjectExport children)
+            if (Ar.GetExport(ChildIndex) is FObjectExport children)
             {
                 Children = children;
             }
-#if DEBUG
-            else if (_pkg.GetExport(childIndex) is FObjectImport)
-                throw new Exception();
-#endif
         }
     }
 }

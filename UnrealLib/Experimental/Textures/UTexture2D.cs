@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.Diagnostics;
 using UnrealLib.Core;
 using UnrealLib.Enums.Textures;
 using UnrealLib.Experimental.UnObj.DefaultProperties;
@@ -7,7 +7,7 @@ using UnrealLib.Interfaces;
 
 namespace UnrealLib.Experimental.Textures
 {
-    public class UTexture2D(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : UTexture(stream, pkg, export)
+    public class UTexture2D(FObjectExport export) : UTexture(export)
     {
         #region Structs
 
@@ -17,19 +17,13 @@ namespace UnrealLib.Experimental.Textures
             public int SizeX;
             public int SizeY;
 
-            public void Serialize(UnrealStream stream)
+            public void Serialize(UnrealArchive Ar)
             {
-                stream.Serialize(ref Data);
+                // Skips over any inlined data
+                Ar.Serialize(ref Data);
 
-                // Skip over inlined data if we don't need it right now.
-                // @TODO add a flag for this?
-                if (!Data.IsStoredInSeparateFile)
-                {
-                    stream.Position += Data.Count;
-                }
-
-                stream.Serialize(ref SizeX);
-                stream.Serialize(ref SizeY);
+                Ar.Serialize(ref SizeX);
+                Ar.Serialize(ref SizeY);
             }
         }
 
@@ -42,7 +36,7 @@ namespace UnrealLib.Experimental.Textures
 
         /** Cached PVRTC compressed texture data									*/
         // public Texture2DMipMap[] CachedPVRTCMips;
-        public List<Texture2DMipMap> CachedPVRTCMips;
+        public Texture2DMipMap[] CachedPVRTCMips;
 
         /** Cached ATITC compressed texture data									*/
         // public Texture2DMipMap[] CachedATITCMips;
@@ -101,16 +95,16 @@ namespace UnrealLib.Experimental.Textures
         #endregion
 
         // This NEEDS to be source-generated
-        public override void SerializeScriptProperties(UnrealStream stream, UnrealPackage pkg)
+        public override void SerializeScriptProperties()
         {
-            if (stream.IsLoading)
+            if (Ar.IsLoading)
             {
                 DefaultProperties = new();
 
                 while (true)
                 {
                     FPropertyTag Tag = new();
-                    Tag.Serialize(stream, pkg);
+                    Tag.Serialize(Ar);
 
                     if (Tag.Name == "None") return;
 
@@ -134,6 +128,12 @@ namespace UnrealLib.Experimental.Textures
                         case nameof(MipTailBaseIdx): MipTailBaseIdx = Tag.Value.Int; break;
                         case nameof(InternalFormatLODBias): InternalFormatLODBias = Tag.Value.Int; break;
 
+                        // FLOAT
+                        case nameof(AdjustBrightnessCurve): AdjustBrightness = Tag.Value.Float; break;
+                        case nameof(AdjustBrightness): AdjustBrightness = Tag.Value.Float; break;
+                        case nameof(AdjustSaturation): AdjustSaturation = Tag.Value.Float; break;
+                        case nameof(AdjustRGBCurve): AdjustRGBCurve = Tag.Value.Float; break;
+
                         // FLOAT[]
                         case nameof(UnpackMin): UnpackMin[Tag.ArrayIndex] = Tag.Value.Float; break;
 
@@ -141,13 +141,13 @@ namespace UnrealLib.Experimental.Textures
                         case nameof(TextureFileCacheName): TextureFileCacheName = Tag.Value.Name; break;
 
                         // ENUM
-                        case nameof(AddressX): AddressX = GetTextureAddress(pkg.GetName(Tag.Value.Name.Index).Name); break;
-                        case nameof(AddressY): AddressY = GetTextureAddress(pkg.GetName(Tag.Value.Name.Index).Name); break;
-                        case nameof(Filter): Filter = GetTextureFilter(pkg.GetName(Tag.Value.Name.Index).Name); break;
-                        case nameof(LODGroup): LODGroup = GetTextureLodGroup(pkg.GetName(Tag.Value.Name.Index).Name); break;
-                        case nameof(Format): Format = GetPixelFormat(pkg.GetName(Tag.Value.Name.Index).Name); break;
-                        case nameof(CompressionSettings): CompressionSettings = GetCompressionSettings(pkg.GetName(Tag.Value.Name.Index).Name); break;
-                        case nameof(MipGenSettings): MipGenSettings = GetMipGenSettings(pkg.GetName(Tag.Value.Name.Index).Name); break;
+                        case nameof(AddressX): AddressX = GetTextureAddress(Ar.GetNameEntry(Tag.Value.Name.Index).Name); break;
+                        case nameof(AddressY): AddressY = GetTextureAddress(Ar.GetNameEntry(Tag.Value.Name.Index).Name); break;
+                        case nameof(Filter): Filter = GetTextureFilter(Ar.GetNameEntry(Tag.Value.Name.Index).Name); break;
+                        case nameof(LODGroup): LODGroup = GetTextureLodGroup(Ar.GetNameEntry(Tag.Value.Name.Index).Name); break;
+                        case nameof(Format): Format = GetPixelFormat(Ar.GetNameEntry(Tag.Value.Name.Index).Name); break;
+                        case nameof(CompressionSettings): CompressionSettings = GetCompressionSettings(Ar.GetNameEntry(Tag.Value.Name.Index).Name); break;
+                        case nameof(MipGenSettings): MipGenSettings = GetMipGenSettings(Ar.GetNameEntry(Tag.Value.Name.Index).Name); break;
                         default:
                             {
                                 // Unexpected properties are dumped here
@@ -161,14 +161,26 @@ namespace UnrealLib.Experimental.Textures
             }
         }
 
-        public override void Serialize(UnrealStream stream)
+        public override void Serialize()
         {
-            base.Serialize(stream);
+            base.Serialize();
 
-            stream.Serialize(ref CachedPVRTCMips);
+            // Skip serializing cached mips if there's no texture data
+            if (SizeX <= 0 || SizeY <= 0) return;
+
+            Ar.Serialize(ref CachedPVRTCMips);
+
+#if DEBUG
+            foreach (var mip in CachedPVRTCMips)
+            {
+                Debug.Assert(mip.SizeY > 0 && mip.SizeY <= 4096);
+                Debug.Assert(mip.SizeX > 0 && mip.SizeX <= 4096);
+            }
+#endif
 
             // @TODO this is a hack. I don't know what to do in this scenario
-            if (CachedPVRTCMips.Count > 0 && !CachedPVRTCMips[0].Data.IsStoredInSeparateFile)
+            // @TODO now that UnrealArchive has merged, look into fixing this here
+            if (CachedPVRTCMips.Length > 0 && !CachedPVRTCMips[0].Data.IsStoredInSeparateFile)
             {
                 var mip = CachedPVRTCMips[0];
                 mip.SizeX = SizeX;
@@ -188,6 +200,7 @@ namespace UnrealLib.Experimental.Textures
         private static TextureCompressionSettings GetCompressionSettings(string str) => str switch
         {
             "TC_Normalmap" => TextureCompressionSettings.Normalmap,
+            "TC_NormalmapAlpha" => TextureCompressionSettings.NormalmapAlpha,
             "TC_NormalmapUncompressed" => TextureCompressionSettings.NormalmapUncompressed,
             "TC_Grayscale" => TextureCompressionSettings.Grayscale
         };
@@ -248,17 +261,27 @@ namespace UnrealLib.Experimental.Textures
         /// </summary>
         public bool GetFirstValidPVRTCMip(out Texture2DMipMap outMip)
         {
-            foreach (var mip in CachedPVRTCMips)
+            if (CachedPVRTCMips is not null)
             {
-                if (mip.Data.ContainsData)
+                foreach (var mip in CachedPVRTCMips)
                 {
-                    outMip = mip;
-                    return true;
+                    if (mip.Data.ContainsData)
+                    {
+                        // PVRTC does not support 4096x4096. All mips this size should be cooked out anyway
+                        Debug.Assert(mip.SizeX > 0 && mip.SizeX <= 2048);
+                        Debug.Assert(mip.SizeY > 0 && mip.SizeY <= 2048);
+
+                        outMip = mip;
+                        return true;
+                    }
                 }
             }
 
             outMip = default;
             return false;
         }
+
+        // Not all-inclusive, but covers everything IB has ever used
+        public bool IsCompressed() => Format is not (PixelFormat.A32B32G32R32F or PixelFormat.A8R8G8B8 or PixelFormat.G8 or PixelFormat.G16 or PixelFormat.V8U8);
     }
 }

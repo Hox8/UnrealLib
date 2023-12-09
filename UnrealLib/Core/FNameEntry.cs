@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Text;
+﻿using System.Collections.Generic;
 using UnrealLib.Enums;
 using UnrealLib.Interfaces;
 
@@ -10,64 +6,34 @@ namespace UnrealLib.Core;
 
 public class FNameEntry : ISerializable
 {
-    // Serialized
+    #region Serialized members
+
     internal string Name;
-    internal ObjectFlags NameFlags;
+    internal ObjectFlags Flags;
 
-    // Transient
-    public int SerializedIndex;
-    public bool HasPositiveMinInstance;
+    #endregion
 
-    /// <summary>
-    /// The import object referencing this name, if any.
-    /// </summary>
-    /// <remarks>
-    /// In-memory only.
-    /// </remarks>
-    internal List<FObjectImport> Imports { get; private set; } = new();
+    #region Transient members
 
-    /// <summary>
-    /// A list of export objects referencing this name.
-    /// </summary>
-    /// <remarks>
-    /// In-memory only.
-    /// </remarks>
-    internal List<FObjectExport> Exports { get; private set; } = new();
+    // List to track FObjectResource usage of this FNameEntry
+    internal List<FObjectResource> Users = [];
 
-    // @TODO: Track index serialized to support moving names around
-    public void Serialize(UnrealStream stream)
-    {
-        stream.Serialize(ref Name);
-        stream.Serialize(ref NameFlags);
-    }
+    // This is used to keep FName numbers consistent with that of UEE.
+    // This is a hack; I don't understand how it works.
+    // Set during FObjectResource::Link()
+    internal bool bDoOffset = false;
 
-    public void Register(FObjectExport export)
-    {
-        Exports.Add(export);
-        if (export.ObjectName.Instance > 0) HasPositiveMinInstance = true;
-    }
+    #endregion
 
-    public void Register(FObjectImport import) => Imports.Add(import);
+    #region Accessors
 
-    /// <summary>
-    /// Performs a case-insensitive comparison and returns the result.
-    /// </summary>
-    /// <remarks>
-    /// FNames should NEVER contain Unicode characters. Optimizations have been done with this in mind.
-    /// </remarks>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Equals(string b)
-    {
-        Debug.Assert(Name is not null, "Cannot get name of null Name reference!");
-        Debug.Assert(Ascii.IsValid(Name) && Ascii.IsValid(b), "FName or compare string contain utf16 characters!");
-        
-        return Ascii.EqualsIgnoreCase(Name, b);
-    }
-
-    public static bool operator ==(FNameEntry a, FNameEntry b) => a.Name.Equals(b.Name) && a.NameFlags == b.NameFlags;
-    public static bool operator !=(FNameEntry a, FNameEntry b) => !(a == b);
-    public static bool operator ==(FNameEntry a, string b) => a.Equals(b);
-    public static bool operator !=(FNameEntry a, string b) => !(a == b);
-    
     public override string ToString() => Name;
+
+    #endregion
+
+    public void Serialize(UnrealArchive Ar)
+    {
+        Ar.Serialize(ref Name);
+        Ar.Serialize(ref Flags);
+    }
 }

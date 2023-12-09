@@ -31,7 +31,7 @@ public class Ini : ISerializable
     public string Description;
 
     /// <summary>
-    /// Parameterless constructor. Used internally by UnrealStream serializer.
+    /// Parameterless constructor. Used internally by UnrealArchive serializer.
     /// </summary>
     public Ini() { }
 
@@ -213,10 +213,10 @@ public class Ini : ISerializable
 
     #endregion
 
-    public void Serialize(UnrealStream stream)
+    public void Serialize(UnrealArchive Ar)
     {
-        stream.Serialize(ref Path);
-        stream.Serialize(ref Sections);
+        Ar.Serialize(ref Path);
+        Ar.Serialize(ref Sections);
     }
 
     public override string ToString() => Path;
@@ -238,7 +238,7 @@ public sealed class IniOptions
     public bool KeepEmptySections { get; set; } = false;
 
     public IniOptions() {}
-    
+
     public IniOptions(CoalescedOptions options)
     {
         KeepGlobals = options.KeepGlobals;

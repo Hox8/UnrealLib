@@ -15,8 +15,8 @@ public static class AES
         Aes.Padding = PaddingMode.Zeros;
     }
 
-    // AES keys for each game that uses encryption. Obtained via RE.
-    // These keys appear to be consistent from initial to latest release for each game.
+    // AES keys for each game that uses encryption.
+    // These keys appear to remain consistent from initial to final release for each game.
     private static byte[] GetGameKey(Game game) => game switch
     {
         Game.IB2 => "|FK}S];v]!!cw@E4l-gMXa9yDPvRfF*B"u8.ToArray(),
@@ -25,18 +25,18 @@ public static class AES
     };
 
     /// <summary>
-    /// Takes an UnrealStream as input and attempts to un/encrypt the contents. This modifies the UnrealStream!
+    /// Takes an UnrealArchive as input and attempts to un/encrypt the contents. Not pure.
     /// </summary>
-    /// <param name="stream">The UnrealStream containing the coalesced data.</param>
-    /// <param name="game">The game of the corresponding coalesced data. Used for encryption.</param>
+    /// <param name="Ar">The UnrealArchive containing the coalesced data.</param>
+    /// <param name="game">The Game of the corresponding coalesced data. Used to determine encryption.</param>
     /// <param name="isDecrypting">A boolean determining whether to decrypt or encrypt data.</param>
-    public static void CryptoECB(UnrealStream stream, Game game, bool isDecrypting)
+    public static void CryptoECB(UnrealArchive Ar, Game game, bool isDecrypting)
     {
         // If stream isn't a valid ECB block size (multiple of 16), pad its length to the next multiple
-        int remainder = (int)stream.Length % 16;
+        int remainder = (int)Ar.Length % 16;
         if (remainder != 0)
         {
-            stream.SetLength(stream.Length + 16 - remainder);
+            Ar.SetLength(Ar.Length + 16 - remainder);
         }
 
         // Create Crypto transformer
@@ -45,13 +45,12 @@ public static class AES
             : Aes.CreateEncryptor(GetGameKey(game), null);
 
         // Do Crypto
-        stream.Position = 0;
-        var result = crypto.TransformFinalBlock(stream.ToArray(), 0, (int)stream.Length);
+        var result = crypto.TransformFinalBlock(Ar.GetBufferRaw(), 0, (int)Ar.Length);
 
         // Write result back to stream
-        stream.Position = 0;
-        stream.Write(result);
-        stream.SetLength(stream.Position);
+        Ar.Position = 0;
+        Ar.Write(result);
+        Ar.SetLength(Ar.Position);
     }
 
     /// <summary>
@@ -73,6 +72,6 @@ public static class AES
     /// This takes advantage of the fact that the first four bytes in the block represent the int32 number of ini files.
     /// <br/>The upper two bytes will always be 0 for reasonable / valid Coalesced files.
     /// </remarks>
-    /// <returns>True if the block is unencrytped, False if not.</returns>
+    /// <returns>True if the block is unencrypted, False if not.</returns>
     public static bool BlockIsUnencrypted(Span<byte> block) => block[2] == 0 && block[3] == 0;
 }

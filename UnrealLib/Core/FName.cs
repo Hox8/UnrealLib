@@ -1,67 +1,76 @@
-﻿using System.IO;
-using System.Runtime.CompilerServices;
-using UnrealLib.Interfaces;
+﻿using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
 
 public class FName : ISerializable
 {
-    // Serialized
-    public int Index;
-    public int Instance;
-    
-    // Transient
-    internal FNameEntry Name;
+    #region Serialized members
 
-    public void Serialize(UnrealStream stream)
-    {
-        // if (stream.IsLoading)
-        // {
-            stream.Serialize(ref Index);
-        // }
-        // else
-        // {
-        //     stream.Serialize(ref Name.SerializedIndex);
-        // }
-        
-        stream.Serialize(ref Instance);
-    }
+    internal int Index;
+    internal int Number = 0;
 
-    public void Serialize(UnrealStream stream, UnrealPackage pkg)
-    {
-        if (stream.IsLoading)
-        {
-            stream.Serialize(ref Index);
-            Name = pkg.GetName(Index);
-        }
-        else
-        {
-            stream.Serialize(ref Name.SerializedIndex);
-        }
+    #endregion
 
-        stream.Serialize(ref Instance);
-    }
+    #region Transient members
+
+    public FNameEntry NameEntry { get; internal set; }
+
+    #endregion
+
+    #region Accessors
 
     /// <summary>
-    /// Performs a case-insensitive comparison and returns the result. Name instance is ignored here!
+    /// Returns the string name of this FName, including its number delimiter if applicable.
     /// </summary>
-    /// <remarks>
-    /// FNames should NEVER contain Unicode characters. Optimizations have been done with this in mind.
-    /// </remarks>
-    // @TODO: This doesn't take name instances into account.
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public bool Equals(string? b) => Name.Equals(b);
+    public string Name => Number < 2 ? NameEntry.Name : $"{NameEntry}_{Number - 1}";
+    public override string ToString() => Name;
 
-    public static bool operator ==(FName a, FName b) => a.Name == b.Name && a.Instance == b.Instance;
+    #endregion
+
+    public void Serialize(UnrealArchive _)
+    {
+        var Ar = (UnrealPackage)_;
+
+        Ar.Serialize(ref Index);
+        Ar.Serialize(ref Number);
+
+        // Linking here is SAFE as the name table is serialized before anything else.
+        // This also safeguards against forgetting to link these anywhere in the codebase
+        NameEntry = Ar.GetNameEntry(Index);
+        if (Number > 0) NameEntry.bDoOffset = true;
+    }
+
+    // @TODO fails on null
+    public static bool operator ==(FName a, FName b) => a.Name == b.Name && a.Number == b.Number;
     public static bool operator !=(FName a, FName b) => !(a == b);
-    public static bool operator ==(FName a, string b) => a.Equals(b);
+    public static bool operator ==(FName a, string b) => a.Name.Equals(b);
     public static bool operator !=(FName a, string b) => !(a == b);
 
-    public override string ToString() => Instance > 1 ? $"{Name.Name}_{Instance - 1}" : Name.Name;
-    /*{
-        string output = Name.Name;
-        if (Instance > 1) output += $"_{Instance - 1}";
+    /// <summary>
+    /// Attempts to split a numbered name i.e. 'String_3' into separate Name + Number fields.
+    /// </summary>
+    /// <param name="input">The old-style name to be split.</param>
+    /// <param name="newName">The resultant string. Will equal the input string if conversion failed.</param>
+    /// <param name="newNumber">The resultant number. Will equal 0 if conversion failed.</param>
+    /// <returns>True if the conversion succeeded, otherwise false.</returns>
+    public static bool SplitName(string input, out string newName, out int newNumber)
+    {
+        newName = input;
+        newNumber = 0;
 
-        return output;
-    }*/
+        // Get index of final underscore
+        int index = input.LastIndexOf('_');
+
+        // If the underscore was not found, or it's the first/final char, return false
+        if (index <= 0 || index == input.Length) return false;
+
+        // If the number is padded i.e. '01' or '00033', return false
+        if (input[index + 1] == '0' && index + 1 != input.Length -1) return false;
+
+        // Return false if number was not a valid integer
+        if (!int.TryParse(input[(index + 1)..], out newNumber)) return false;
+
+        newName = input[..index];
+        return true;
+    }
 }

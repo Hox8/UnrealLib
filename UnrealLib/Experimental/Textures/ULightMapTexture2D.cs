@@ -3,11 +3,11 @@ using UnrealLib.Enums.Textures;
 
 namespace UnrealLib.Experimental.Textures;
 
-public class ULightMapTexture2D(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : UTexture2D(stream, pkg, export)
+public class ULightMapTexture2D(FObjectExport export) : UTexture2D(export)
 {
     // private LightmapFlags LightmapFlags;
 
-    //public override void Serialize(UnrealStream stream)
+    //public override void Serialize(UnrealArchive stream)
     //{
     //    base.Serialize(stream);
 

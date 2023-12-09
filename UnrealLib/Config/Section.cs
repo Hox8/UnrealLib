@@ -10,7 +10,7 @@ public class Section : ISerializable
     public List<Property> Properties = new();
 
     /// <summary>
-    /// Parameterless constructor. Used internally by UnrealStream serializer.
+    /// Parameterless constructor. Used internally by UnrealArchive serializer.
     /// </summary>
     public Section() { }
 
@@ -178,10 +178,10 @@ public class Section : ISerializable
 
     #endregion
 
-    public void Serialize(UnrealStream stream)
+    public void Serialize(UnrealArchive Ar)
     {
-        stream.Serialize(ref Name);
-        stream.Serialize(ref Properties);
+        Ar.Serialize(ref Name);
+        Ar.Serialize(ref Properties);
     }
 
     public override string ToString() => $"[{Name}]";

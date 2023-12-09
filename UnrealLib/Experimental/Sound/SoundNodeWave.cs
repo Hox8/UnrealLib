@@ -1,7 +1,11 @@
 ﻿using UnrealLib.Core;
 using UnrealLib.Enums;
+using UnrealLib.Experimental.UnObj.DefaultProperties;
 
 namespace UnrealLib.Experimental.Sound;
+
+// ADPCM stereo sounds do not play correctly after IB2 v1.0.0!
+// Setting NumChannels in the header from 2 to 1 allows it to play (albeit in mono)
 
 /// <summary>A line of subtitle text and the time at which it should be displayed.</summary>
 public struct SubtitleCue
@@ -34,11 +38,11 @@ public struct LocalizedSubtitle
     public bool bSingleLine;
 }
 
-public class SoundNodeWave(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : SoundNode(stream, pkg, export)
+public class SoundNodeWave(FObjectExport export) : SoundNode(export)
 {
     #region Properties
 
-    /// <summary>Platform agnostic compression quality. 1..100 with 1 being best compression and 100 being best quality.</summary>
+    /// <summary>Platform-agnostic compression quality. 1..100 with 1 being best compression and 100 being best quality.</summary>
     public int CompressionQuality = 40;
     /// <summary>If set, forces wave data to be decompressed during playback instead of upfront on platforms that have a choice.</summary>
     public bool bForceRealTimeDecompression;
@@ -55,13 +59,13 @@ public class SoundNodeWave(UnrealStream stream, UnrealPackage pkg, FObjectExport
     /// <summary>Set to true for programmatically-generated, streamed audio. Not used from the editor; you should use SoundNodeWaveStreaming.uc for this.</summary>
     private bool bProcedural;
 
-    /// <summary>Playback volume of sound 0 to 1</summary>
+    /// <summary>Playback volume of sound 0 to 1.</summary>
     public float Volume = 0.75f;
-    /// <summary>Playback pitch for sound 0.4 to 2.0</summary>
+    /// <summary>Playback pitch for sound 0.4 to 2.0.</summary>
     public float Pitch = 1.0f;
     /// <summary>Duration of sound in seconds.</summary>
     public float Duration;
-    /// <summary>Number of channels of multichannel data; 1 or 2 for regular mono and stereo files</summary>
+    /// <summary>Number of channels of multichannel data; 1 or 2 for regular mono and stereo files.</summary>
     public int NumChannels;
     /// <summary>Cached sample rate for displaying in the tools.</summary>
     public int SampleRate;
@@ -70,21 +74,23 @@ public class SoundNodeWave(UnrealStream stream, UnrealPackage pkg, FObjectExport
     public int[] ChannelOffsets;
     /// <summary>Sizes of the bulk data for the source WAV data.</summary>
     public int[] ChannelSizes;
-    /// <summary>Uncompressed WAV data 16-bit in mono or stereo - stereo not allowed for multichannel data.</summary>
-    public FUntypedBulkData RawData;
 
+    /// <summary>Uncompressed WAV data 16-bit in mono or stereo - stereo not allowed for multichannel data.</summary>
+    /// <remarks>Used by Infinity Blade I.</remarks>
+    public FUntypedBulkData RawData;
     /// <summary>Cached OGG Vorbis data.</summary>
-    private FUntypedBulkData CompressedPCData;
+    public FUntypedBulkData CompressedPCData;
     /// <summary>Cached cooked Xbox 360 data to speed up iteration times.</summary>
-    private FUntypedBulkData CompressedXbox360Data;
+    public FUntypedBulkData CompressedXbox360Data;
     /// <summary>Cached cooked PS3 data to speed up iteration times.</summary>
-    private FUntypedBulkData CompressedPS3Data;
+    public FUntypedBulkData CompressedPS3Data;
     /// <summary>Cached cooked WiiU data to speed up iteration times.</summary>
-    private FUntypedBulkData CompressedWiiUData;
+    public FUntypedBulkData CompressedWiiUData;
     /// <summary>Cached cooked IPhone data to speed up iteration times.</summary>
-    private FUntypedBulkData CompressedIPhoneData;
+    /// <remarks>Used by Infinity Blade II and newer.</remarks>
+    public FUntypedBulkData CompressedIPhoneData;
     /// <summary>Cached cooked Flash data to speed up iteration times.</summary>
-    private FUntypedBulkData CompressedFlashData;
+    public FUntypedBulkData CompressedFlashData;
 
     /// <summary>
     ///  Subtitle cues. If empty, use SpokenText as the subtitle.
@@ -97,12 +103,12 @@ public class SoundNodeWave(UnrealStream stream, UnrealPackage pkg, FObjectExport
     public string Comment;
     /// <summary>TRUE if the subtitles have been split manually.</summary>
     public bool bManualWordWrap;
-    /// <summary>TRUE if the subtitles display as a sequence of single lines as opposed to multiline</summary>
+    /// <summary>TRUE if the subtitles display as a sequence of single lines as opposed to multiline.</summary>
     public bool bSingleLine;
     /// <summary>The array of the subtitles for each language. Generated at cook time.</summary>
     public LocalizedSubtitle[] LocalizedSubtitles;
 
-    /// <summary>If on mobile and the platform's DetailMode < this value, the sound will be discarded to conserve memory.</summary>
+    /// <summary>If on mobile and the platform's DetailMode is less than this value, the sound will be discarded to conserve memory.</summary>
     public EDetailMode MobileDetailMode;
 
     /// <summary>Path to the resource used to construct this sound node wave.</summary>
@@ -111,38 +117,37 @@ public class SoundNodeWave(UnrealStream stream, UnrealPackage pkg, FObjectExport
     private string SourceFileTimestamp;
     #endregion
 
-    public override void Serialize(UnrealStream stream)
+    public override void Serialize()
     {
-        base.Serialize(stream);
+        base.Serialize();
 
-        stream.Serialize(ref RawData);
-        stream.Serialize(ref CompressedPCData);
-        stream.Serialize(ref CompressedXbox360Data);
-        stream.Serialize(ref CompressedPS3Data);
+        Ar.Serialize(ref RawData);
+        Ar.Serialize(ref CompressedPCData);
+        Ar.Serialize(ref CompressedXbox360Data);
+        Ar.Serialize(ref CompressedPS3Data);
 
-        // @versioning If UPK version >= 845
-        if (true)
+        // IB1: No
+        // IB2: No
+        // IB3: Yes
+        if (Ar.Version >= 845)
         {
-            stream.Serialize(ref CompressedWiiUData);
+            Ar.Serialize(ref CompressedWiiUData);
         }
 
-        // @versioning If UPK version >= 851
-        // IB2 v1.3.5 needs this
-        if (true)
+        // IB1: No
+        // IB2: Yes
+        // IB3: Yes
+        if (Ar.Version >= 851 || Ar.Game is Game.IB2)
         {
-            stream.Serialize(ref CompressedIPhoneData);
+            Ar.Serialize(ref CompressedIPhoneData);
         }
 
-        // @versioning If UPK version >= 854
-        if (false)
+        // IB1: No
+        // IB2: No
+        // IB3: Yes
+        if (Ar.Version >= 854)
         {
-            stream.Serialize(ref CompressedFlashData);
-        }
-
-        // @versioning If UPK version <= 867
-        if (false)
-        {
-            CompressedIPhoneData.RemoveBulkData();
+            Ar.Serialize(ref CompressedFlashData);
         }
     }
 }

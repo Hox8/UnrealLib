@@ -3,7 +3,7 @@ using UnrealLib.Experimental.UnObj;
 
 namespace UnrealLib.Experimental.Textures
 {
-    public class USurface(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : UObject(stream, pkg, export)
+    public class USurface(FObjectExport export) : UObject(export)
     {
         // USurface is empty sides from two native functions
     }

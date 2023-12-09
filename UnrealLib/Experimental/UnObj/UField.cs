@@ -2,18 +2,19 @@
 
 namespace UnrealLib.Experimental.UnObj;
 
-public class UField(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : UObject(stream, pkg, export)
+public class UField(FObjectExport export) : UObject(export)
 {
     protected UField? Next;
 
-    public override void Serialize(UnrealStream stream)
+    public override void Serialize()
     {
         int nextIndex = default;
 
-        base.Serialize(stream);
+        base.Serialize();
 
-        stream.Serialize(ref nextIndex);
-        if (pkg.GetExport(nextIndex)?.Object is UField ufield)
+        Ar.Serialize(ref nextIndex);
+
+        if (Ar.GetObject(nextIndex) is FObjectExport export && export.Object is UField ufield)
         {
             Next = ufield;
         }

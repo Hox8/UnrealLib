@@ -10,6 +10,11 @@
 		<!-- Comment this out if unneeded to save ~75kb -->
 		<!-- @TODO: This is painful to work with. Find a better method. -->
 		<DefineConstants>WITH_COALESCED_EDITOR</DefineConstants>
+
+		<!-- Toggles constructing object dependency graphs (EARLY, unoptimized) -->
+		<!-- Has a noticeable impact on memory usage, and have very low usage realistically (use Lazy<T>). -->
+		<!-- CURRENTLY SERVES NO PURPOSE. DO NOT USE! -->
+		<!--<DefineConstants>TRACK_OBJECT_USAGE</DefineConstants>-->
 	</PropertyGroup>
 
 	<PropertyGroup Condition=" '$(OS)' != 'Windows_NT' ">
@@ -23,5 +28,11 @@
 	<PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
 		<DebugType>full</DebugType>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <Reference Include="Zip Reduced">
+	    <HintPath>..\..\..\IBPatcherNovemberRewrite\IBPatcherNovemberRewrite\Zip Reduced.dll</HintPath>
+	  </Reference>
+	</ItemGroup>
 
 </Project>

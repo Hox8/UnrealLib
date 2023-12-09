@@ -5,7 +5,7 @@ using UnrealLib.Core;
 namespace UnrealLib.Experimental.UnObj.DefaultProperties
 {
     // This class will store the metadata AND value for default properties.
-    public class FPropertyTag // : ISerializable
+    public class FPropertyTag // : ISerializable2
     {
         #region Cached names (dummy)
 
@@ -41,36 +41,41 @@ namespace UnrealLib.Experimental.UnObj.DefaultProperties
 
         internal int Size;
         internal int ArrayIndex;
+        internal int ArraySize;
 
         internal FPropertyValue Value = new();
 
-        public void Serialize(UnrealStream stream, UnrealPackage pkg)
+        public void Serialize(UnrealPackage Ar)
         {
-            Name.Serialize(stream, pkg);
+            Name.Serialize(Ar);
             if (Name == NAME_None) return;
 
-            Type.Serialize(stream, pkg);
-            stream.Serialize(ref Size);
-            stream.Serialize(ref ArrayIndex);
+            Type.Serialize(Ar);
+            Ar.Serialize(ref Size);
+            Ar.Serialize(ref ArrayIndex);
 
             switch (Type.ToString())
             {
-                case NAME_BoolProperty: stream.Serialize(ref Value.Bool); break;
-                case NAME_IntProperty: stream.Serialize(ref Value.Int); break;
-                case NAME_FloatProperty: stream.Serialize(ref Value.Float); break;
-                case NAME_StrProperty: stream.Serialize(ref Value.String); break;
-                case NAME_ObjectProperty: stream.Serialize(ref Value.Int); break;
-                case NAME_NameProperty: stream.Serialize(ref Value.Name); Value.Name.Name = pkg.GetName(Value.Name.Index); break;
+                case NAME_BoolProperty: Ar.Serialize(ref Value.Bool); break;
+                case NAME_IntProperty: Ar.Serialize(ref Value.Int); break;
+                case NAME_FloatProperty: Ar.Serialize(ref Value.Float); break;
+                case NAME_StrProperty: Ar.Serialize(ref Value.String); break;
+                case NAME_ObjectProperty: Ar.Serialize(ref Value.Int); break;
+                case NAME_NameProperty: Ar.Serialize(ref Value.Name); break;
 
-                case NAME_ByteProperty: TargetName.Serialize(stream, pkg); stream.Serialize(ref Value.Name); break;
-                case NAME_StructProperty: TargetName.Serialize(stream, pkg); SerializeStruct(); break;
-                case NAME_ArrayProperty: TargetName.Serialize(stream, pkg); SerializeArray(); break;
+                case NAME_ByteProperty: TargetName.Serialize(Ar); Ar.Serialize(ref Value.Name); break;
+                case NAME_StructProperty: TargetName.Serialize(Ar); SerializeStruct(); break;
+                case NAME_ArrayProperty: SerializeArray(Ar); break;
 
                 default: throw new NotImplementedException($"Unrecognized default property type '{Type}'");
             }
         }
 
-        private void SerializeArray() => throw new NotImplementedException();
+        private void SerializeArray(UnrealArchive Ar)
+        {
+            Ar.Position += Size;
+        }
+
         private void SerializeStruct() => throw new NotImplementedException();
         public override string ToString() => Name.ToString();
     }

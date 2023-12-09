@@ -3,24 +3,29 @@ using UnrealLib.Core;
 
 namespace UnrealLib.Experimental.UnObj;
 
-public class UFunction(UnrealStream stream, UnrealPackage pkg, FObjectExport export) : UStruct(stream, pkg, export)
+public class UFunction(FObjectExport export) : UStruct(export)
 {
+    #region Serialized members
+
     protected FunctionFlags FunctionFlags;
     protected short iNative;
     protected short RepOffset;
     protected byte OperPrecedence;
 
-    public override void Serialize(UnrealStream stream)
+    #endregion
+
+    public override void Serialize()
     {
-        base.Serialize(stream);
+        base.Serialize();
 
-        stream.Serialize(ref iNative);
-        stream.Serialize(ref OperPrecedence);
-        stream.Serialize(ref FunctionFlags);
+        Ar.Serialize(ref iNative);
+        Ar.Serialize(ref OperPrecedence);
+        Ar.Serialize(ref FunctionFlags);
 
+        // @TODO this check exists in at least one other UObject class. Helper?
         if ((FunctionFlags & FunctionFlags.Net) != 0)
         {
-            stream.Serialize(ref RepOffset);
+            Ar.Serialize(ref RepOffset);
         }
     }
 }

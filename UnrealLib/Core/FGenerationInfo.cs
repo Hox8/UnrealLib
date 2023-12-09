@@ -1,8 +1,8 @@
 ﻿namespace UnrealLib.Core;
 
-public struct FGenerationInfo
+public readonly struct FGenerationInfo
 {
-    private int ExportCount, NameCount, NetObjectCount;
+    public readonly int ExportCount, NameCount, NetObjectCount;
 
-    public override string ToString() => $"{ExportCount}/{NameCount}/{NetObjectCount}";
+    public override string ToString() => $"{ExportCount} / {NameCount} / {NetObjectCount}";
 }

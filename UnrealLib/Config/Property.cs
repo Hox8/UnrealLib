@@ -33,7 +33,7 @@ public class Property : ISerializable
     public string Value = string.Empty;
 
     /// <summary>
-    /// Parameterless constructor. Used internally by UnrealStream serializer.
+    /// Parameterless constructor. Used internally by UnrealArchive serializer.
     /// </summary>
     public Property() { }
 
@@ -65,7 +65,7 @@ public class Property : ISerializable
         Value = sub.Length == 2 ? sub[1].Replace("\\n", "\n") : string.Empty;
     }
 
-    public void Serialize(UnrealStream stream)
+    public void Serialize(UnrealArchive stream)
     {
         stream.Serialize(ref Key);
         stream.Serialize(ref Value);
