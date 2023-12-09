@@ -59,7 +59,7 @@ public class Coalesced : UnrealArchive
             }
 
             // Error if the Coalesced file belongs to a game we weren't expecting
-            if (Options.DoSaveEncryption && Game is not Game.Unknown && Game != _decryptedWith)
+            if (Game is not Game.Unknown && Game != _decryptedWith)
             {
                 Error = ArchiveError.UnexpectedGame;
                 return;
@@ -111,7 +111,7 @@ public class Coalesced : UnrealArchive
             // Since we're reusing the original buffer, we need to set the final length in case we're smaller.
             SetLength(Position);
 
-            if (Game is not Game.IB1)
+            if (Options.DoSaveEncryption && Game is not Game.IB1)
             {
                 AES.CryptoECB(this, Game, false);
             }
