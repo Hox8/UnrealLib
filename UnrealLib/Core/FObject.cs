@@ -19,6 +19,7 @@ public abstract class FObjectResource
 
     #region Transient members
  
+    public int TableOffset { get; internal set; }           // File offset of the start of this FObject's header in the table
     public FObjectResource? Outer { get; protected set; }   // This resource's Outer
     public UnrealPackage Package { get; protected set; }    // The UnrealPackage this export belongs to
 #if TRACK_OBJECT_USAGE
@@ -74,6 +75,8 @@ public sealed class FObjectImport : FObjectResource, ISerializable
 
     public void Serialize(UnrealArchive Ar)
     {
+        TableOffset = (int)Ar.Position;
+
         Ar.Serialize(ref ClassPackage);
         Ar.Serialize(ref ClassName);
         Ar.Serialize(ref OuterIndex);
@@ -112,8 +115,16 @@ public sealed class FObjectExport : FObjectResource, ISerializable
 
     #endregion
 
+    #region Acessors
+
+    public int GetSerialOffset() => SerialOffset;
+
+    #endregion
+
     public void Serialize(UnrealArchive Ar)
     {
+        TableOffset = (int)Ar.Position;
+
         Ar.Serialize(ref ClassIndex);
         Ar.Serialize(ref SuperIndex);
         Ar.Serialize(ref OuterIndex);
