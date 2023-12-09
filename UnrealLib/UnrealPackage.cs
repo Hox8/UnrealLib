@@ -18,6 +18,15 @@ public class UnrealPackage : UnrealArchive
     internal FObjectImport[] Imports;
     public FObjectExport[] Exports;
 
+    #region Accessors
+
+    /// <summary>Returns the engine version this package was saved with, e.g. 864.</summary>
+    public int GetEngineVersion() => Summary.EngineVersion;
+    /// <summary>Returns the engine build number this package was saved with, e.g. 9714.</summary>
+    public int GetEngineBuild() => Summary.EngineBuild;
+
+    #endregion
+
     public UnrealPackage(string filePath, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite) : base(filePath, mode, access)
     {
         Load();
@@ -164,14 +173,17 @@ public class UnrealPackage : UnrealArchive
     /// </remarks>
     public void ReplaceExportData(FObjectExport export, ReadOnlySpan<byte> data)
     {
-        IsLoading = false;
+        StartSaving();
 
+        // Update export size infos
         export.SerialSize = data.Length;
         export.SerialOffset = (int)Length;
 
-        Position = export.SerialOffset;
+        // Serialize the updated export entry
+        Position = export.TableOffset;
         export.Serialize(this);
 
+        // Serialize the export data at the end of the file
         Position = Length;
         Write(data);
     }
