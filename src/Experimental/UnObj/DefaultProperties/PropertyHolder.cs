@@ -50,28 +50,3 @@ public abstract class PropertyHolder
 #endif
     }
 }
-
-// ...but this does. Sort of.
-
-public interface IPropertyHolder
-{
-    /// <returns>False if this was the last property to be serialized ("None"), otherwise True.</returns>
-    public static bool GetNextProperty(UnrealArchive Ar, out FPropertyTag Tag)
-    {
-        Tag = new();
-
-        // Tag::Serialize() returns False if we've hit final "None" property, otherwise True
-        return Tag.Serialize(Ar);
-    }
-
-    public void ParseProperty(UnrealArchive Ar, FPropertyTag tag);
-
-    public void SerializeProperties(UnrealArchive Ar)
-    {
-        // Keep pulling in properties until we hit "None"
-        while (GetNextProperty(Ar, out var tag))
-        {
-            ParseProperty(Ar, tag);
-        }
-    }
-}

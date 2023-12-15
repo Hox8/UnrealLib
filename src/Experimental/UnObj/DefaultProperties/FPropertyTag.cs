@@ -24,7 +24,7 @@ public class FPropertyTag
     #region Serialized members
 
     public FName Name, Type, TargetName;
-    public int Size, ArrayIndex;
+    public int Size, ArrayIndex, ArraySize;
 
 #if KEEP_UNKNOWN_DEFAULT_PROPERTIES
     // This field stores the values of unrecognized properties where they can't be assigned directly to a UObject field
@@ -54,6 +54,10 @@ public class FPropertyTag
         if (Type == "StructProperty" || Type == "ByteProperty")
         {
             Ar.Serialize(ref TargetName);
+        }
+        else if (Type == "ArrayProperty")
+        {
+            Ar.Serialize(ref ArraySize);
         }
 
         return true;

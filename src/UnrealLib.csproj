@@ -7,9 +7,8 @@
 		<IsAotCompatible>true</IsAotCompatible>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-		<!-- Comment this out if unneeded to save ~75kb -->
-		<!-- @TODO: This is painful to work with. Find a better method. -->
-		<DefineConstants>WITH_COALESCED_EDITOR</DefineConstants>
+		<!-- When enabled, allows saving Coalesced files to folders and vice-versa. Adds an ~80kb size increase, even if unused. -->
+		<!--<DefineConstants>WITH_COALESCED_EDITOR</DefineConstants>-->
 
 		<!-- Toggles constructing object dependency graphs (EARLY, unoptimized) -->
 		<!-- Has a noticeable impact on memory usage, and have very low usage realistically (use Lazy<T>). -->

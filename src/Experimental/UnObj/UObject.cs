@@ -60,7 +60,7 @@ public class UObject : PropertyHolder
         // UClasses (null) and Components do not serialize script properties
         if (!Ar.SerializeBinaryProperties || Export.Class is not null && this is not UComponent)
         {
-            SerializeProperties(Export.Package);
+            SerializeProperties(Ar);
         }
     }
 }
