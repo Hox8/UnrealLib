@@ -217,7 +217,7 @@ public class UnrealPackage : UnrealArchive
             _ => throw new NotImplementedException($"'{export.Class}' is not implemented")
         };
 
-        uobject.Serialize();
+        uobject.Serialize(export.Package);
         return uobject;
     }
 }

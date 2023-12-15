@@ -22,8 +22,8 @@ public class UObject
 
     #region Transient members
 
-    internal FObjectExport Export { get; private set; }
-    public UnrealPackage Ar => Export.Package;
+    internal FObjectExport Export { get; init; }
+    public UnrealPackage Package => Export.Package;
 
     #endregion
 
@@ -49,7 +49,8 @@ public class UObject
         Export = export;
     }
 
-    public virtual void Serialize()
+    // Position must be set before calling this method!
+    public virtual void Serialize(UnrealArchive Ar)
     {
         if (Ar.IsLoading)
         {

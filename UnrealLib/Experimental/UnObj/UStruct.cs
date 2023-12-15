@@ -21,9 +21,11 @@ public class UStruct(FObjectExport export) : UField(export)
 
     #endregion
 
-    public override void Serialize()
+    public override void Serialize(UnrealArchive _)
     {
-        base.Serialize();
+        var Ar = (UnrealPackage)_;
+
+        base.Serialize(Ar);
 
         Ar.Serialize(ref SuperIndex);
         Ar.Serialize(ref ChildIndex);

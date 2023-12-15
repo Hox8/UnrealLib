@@ -196,9 +196,9 @@ namespace UnrealLib.Experimental.Textures
 
         #endregion
 
-        public override void Serialize()
+    public override void Serialize(UnrealArchive Ar)
         {
-            base.Serialize();
+        base.Serialize(Ar);
 
             Ar.Serialize(ref SourceArt);
         }

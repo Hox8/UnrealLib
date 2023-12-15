@@ -15,9 +15,9 @@ public class UState(FObjectExport export) : UStruct(export)
 
     #endregion
 
-    public override void Serialize()
+    public override void Serialize(UnrealArchive Ar)
     {
-        base.Serialize();
+        base.Serialize(Ar);
 
         Ar.Serialize(ref ProbeMask);
         Ar.Serialize(ref LabelTableOffset);

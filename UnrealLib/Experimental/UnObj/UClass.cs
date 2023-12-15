@@ -17,9 +17,9 @@ public class UClass(FObjectExport export) : UState(export)
 
     #endregion
 
-    public override void Serialize()
+    public override void Serialize(UnrealArchive Ar)
     {
-        base.Serialize();
+        base.Serialize(Ar);
 
         Ar.Serialize(ref ClassFlags);
         Ar.Serialize(ref ClassWithin);

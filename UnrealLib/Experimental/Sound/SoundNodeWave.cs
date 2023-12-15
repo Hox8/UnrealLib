@@ -5,7 +5,7 @@ using UnrealLib.Experimental.UnObj.DefaultProperties;
 namespace UnrealLib.Experimental.Sound;
 
 // ADPCM stereo sounds do not play correctly after IB2 v1.0.0!
-// Setting NumChannels in the header from 2 to 1 allows it to play (albeit in mono)
+// Setting NumChannels in the header from 2 to 1 allows it to play, albeit in mono
 
 /// <summary>A line of subtitle text and the time at which it should be displayed.</summary>
 public struct SubtitleCue
@@ -117,9 +117,9 @@ public class SoundNodeWave(FObjectExport export) : SoundNode(export)
     private string SourceFileTimestamp;
     #endregion
 
-    public override void Serialize()
+    public override void Serialize(UnrealArchive Ar)
     {
-        base.Serialize();
+        base.Serialize(Ar);
 
         Ar.Serialize(ref RawData);
         Ar.Serialize(ref CompressedPCData);
