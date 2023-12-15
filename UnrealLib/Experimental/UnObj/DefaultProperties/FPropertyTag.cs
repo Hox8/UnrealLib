@@ -1,96 +1,61 @@
-﻿using System;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using UnrealLib.Core;
 
-namespace UnrealLib.Experimental.UnObj.DefaultProperties
+namespace UnrealLib.Experimental.UnObj.DefaultProperties;
+
+#if KEEP_UNKNOWN_DEFAULT_PROPERTIES
+[StructLayout(LayoutKind.Explicit)]
+public struct FPropertyValue
 {
-    // This class will store the metadata AND value for default properties.
-    public class FPropertyTag // : ISerializable2
+    [FieldOffset(0)] internal bool Bool;
+    [FieldOffset(0)] internal byte Byte;
+    [FieldOffset(0)] internal int Int;
+    [FieldOffset(0)] internal float Float;
+    [FieldOffset(8)] internal string String;
+    [FieldOffset(8)] internal FName Name;
+}
+#endif
+
+/// <summary>
+/// Stores the "metadata" of a default property.
+/// </summary>
+public class FPropertyTag
+{
+    #region Serialized members
+
+    public FName Name, Type, TargetName;
+    public int Size, ArrayIndex;
+
+#if KEEP_UNKNOWN_DEFAULT_PROPERTIES
+    // This field stores the values of unrecognized properties where they can't be assigned directly to a UObject field
+    // In an ideal world, this field will remain unused
+    public FPropertyValue Value;
+#endif
+
+    #endregion
+
+    #region Accessors
+
+    public override string ToString() => Name.GetString;
+
+    #endregion
+
+    /// <returns>True if this property was fully-serialized (not equal to "None"), otherwise false.</returns>
+    public bool Serialize(UnrealArchive Ar)
     {
-        #region Cached names (dummy)
+        Ar.Serialize(ref Name);
+        if (Name == "None") return false;
 
-        // Placeholder to simulate having cached FNames (implement this later)
-        // Name caching should follow a lazy-initialization approach
-        // Cached names will also be tied to individual packages and not static.    -- that said, the strings will be constant, just not the indices... Helper struct?
+        Ar.Serialize(ref Type);
+        Ar.Serialize(ref Size);
+        Ar.Serialize(ref ArrayIndex);
 
-        public const string NAME_None = "None";
-
-        // Class property types
-        public const string NAME_ByteProperty = "ByteProperty";
-        public const string NAME_IntProperty = "IntProperty";
-        public const string NAME_BoolProperty = "BoolProperty";
-        public const string NAME_FloatProperty = "FloatProperty";
-        public const string NAME_ObjectProperty = "ObjectProperty";
-        public const string NAME_NameProperty = "NameProperty";
-        public const string NAME_DelegateProperty = "DelegateProperty";
-        public const string NAME_ClassProperty = "ClassProperty";
-        public const string NAME_ArrayProperty = "ArrayProperty";
-        public const string NAME_StructProperty = "StructProperty";
-        public const string NAME_VectorProperty = "VectorProperty";
-        public const string NAME_RotatorProperty = "RotatorProperty";
-        public const string NAME_StrProperty = "StrProperty";
-        public const string NAME_MapProperty = "MapProperty";
-        public const string NAME_InterfaceProperty = "InterfaceProperty";
-
-        #endregion
-
-        public FName Name = new();
-        public FName Type = new();
-
-        public FName TargetName = new();
-
-        internal int Size;
-        internal int ArrayIndex;
-        internal int ArraySize;
-
-        internal FPropertyValue Value = new();
-
-        public void Serialize(UnrealPackage Ar)
+        // Structs and Enums have an additional serialized field we need to take care of
+        if (Type == "StructProperty" || Type == "ByteProperty")
         {
-            Name.Serialize(Ar);
-            if (Name == NAME_None) return;
-
-            Type.Serialize(Ar);
-            Ar.Serialize(ref Size);
-            Ar.Serialize(ref ArrayIndex);
-
-            switch (Type.ToString())
-            {
-                case NAME_BoolProperty: Ar.Serialize(ref Value.Bool); break;
-                case NAME_IntProperty: Ar.Serialize(ref Value.Int); break;
-                case NAME_FloatProperty: Ar.Serialize(ref Value.Float); break;
-                case NAME_StrProperty: Ar.Serialize(ref Value.String); break;
-                case NAME_ObjectProperty: Ar.Serialize(ref Value.Int); break;
-                case NAME_NameProperty: Ar.Serialize(ref Value.Name); break;
-
-                case NAME_ByteProperty: TargetName.Serialize(Ar); Ar.Serialize(ref Value.Name); break;
-                case NAME_StructProperty: TargetName.Serialize(Ar); SerializeStruct(); break;
-                case NAME_ArrayProperty: SerializeArray(Ar); break;
-
-                default: throw new NotImplementedException($"Unrecognized default property type '{Type}'");
-            }
+            Ar.Serialize(ref TargetName);
         }
 
-        private void SerializeArray(UnrealArchive Ar)
-        {
-            Ar.Position += Size;
-        }
-
-        private void SerializeStruct() => throw new NotImplementedException();
-        public override string ToString() => Name.ToString();
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    public struct FPropertyValue
-    {
-        // Value types
-        [FieldOffset(0)] internal bool Bool;
-        [FieldOffset(0)] internal byte Byte;
-        [FieldOffset(0)] internal int Int;
-        [FieldOffset(0)] internal float Float;
-
-        // Reference types (each 8 bytes on 64-bit)
-        [FieldOffset(8)] internal string String;
-        [FieldOffset(8)] internal FName Name;
+        return true;
     }
 }

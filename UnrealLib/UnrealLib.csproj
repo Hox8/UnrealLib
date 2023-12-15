@@ -15,6 +15,9 @@
 		<!-- Has a noticeable impact on memory usage, and have very low usage realistically (use Lazy<T>). -->
 		<!-- CURRENTLY SERVES NO PURPOSE. DO NOT USE! -->
 		<!--<DefineConstants>TRACK_OBJECT_USAGE</DefineConstants>-->
+		
+		<!-- If enabled, unknown properties are kept in a List<FPropertyTag>. Known properties will still be assigned to objects directly and won't be placed in the list. -->
+		<DefineConstants>KEEP_UNKNOWN_DEFAULT_PROPERTIES</DefineConstants>
 	</PropertyGroup>
 
 	<PropertyGroup Condition=" '$(OS)' != 'Windows_NT' ">

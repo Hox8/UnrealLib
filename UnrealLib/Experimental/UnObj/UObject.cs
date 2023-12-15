@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnrealLib.Core;
 using UnrealLib.Experimental.Component;
 using UnrealLib.Experimental.UnObj.DefaultProperties;
@@ -11,14 +10,13 @@ namespace UnrealLib.Experimental.UnObj;
 
 // All of these UObject implementations are very rough and shouldn't be used! Probably.
 
-public class UObject
+public class UObject : PropertyHolder
 {
     #region Serialized members
 
     protected int NetIndex;
-    protected List<FPropertyTag> DefaultProperties;
 
-    #endregion
+#endregion
 
     #region Transient members
 
@@ -52,38 +50,17 @@ public class UObject
     // Position must be set before calling this method!
     public virtual void Serialize(UnrealArchive Ar)
     {
-        if (Ar.IsLoading)
-        {
-            Ar.Position = Export.SerialOffset;
-        }
+        //if (Ar.IsLoading)
+        //{
+        //    Ar.Position = Export.SerialOffset;
+        //}
 
         Ar.Serialize(ref NetIndex);
 
         // UClasses (null) and Components do not serialize script properties
-        if (Export.Class is not null && this is not UComponent)
+        if (!Ar.SerializeBinaryProperties || Export.Class is not null && this is not UComponent)
         {
-            SerializeScriptProperties();
-        }
-    }
-
-    // Until this is overridden explicitly within another class, all properties will be
-    // placed in the generic DefaultProperties list, A.K.A the "I don't want to know about
-    // this but don't want to toss it out" basket.
-    public virtual void SerializeScriptProperties()
-    {
-        if (Ar.IsLoading)
-        {
-            DefaultProperties = new();
-            
-            while (true)
-            {
-                FPropertyTag Tag = new();
-                Tag.Serialize(Ar);
-
-                if (Tag.Name == "None") return;
-
-                DefaultProperties.Add(Tag);
-            }
+            SerializeProperties(Export.Package);
         }
     }
 }
