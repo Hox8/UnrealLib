@@ -88,6 +88,15 @@ public class FUntypedBulkData : ISerializable
         }
     }
 
+    public static void DecompressZLibStatic(UnrealArchive Ar)
+    {
+        var buffer = Ar.GetBufferRaw();
+
+        using var zlibstream = new ZlibStream(Ar, CompressionMode.Decompress, true);
+
+        int bytesRead = zlibstream.Read(buffer);
+    }
+
     // CRUDE ZLib impl.
     // Very inefficient; look into pooling and make this method static so as to not lock behind FUntypedBulkData
     private void DecompressZLib(UnrealArchive Ar)

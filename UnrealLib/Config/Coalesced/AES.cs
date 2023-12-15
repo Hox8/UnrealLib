@@ -15,13 +15,17 @@ public static class AES
         Aes.Padding = PaddingMode.Zeros;
     }
 
-    // AES keys for each game that uses encryption.
-    // These keys appear to remain consistent from initial to final release for each game.
-    private static byte[] GetGameKey(Game game) => game switch
+    /// <summary>
+    /// Returns the AES key for each game, used for either Coalesced or save file encryption.
+    /// </summary>
+    /// <param name="game">The game to get the corresponding key for.</param>
+    /// <param name="saveGame">Whether to return the key used to encrypt save games, if applicable.</param>
+    private static byte[] GetGameKey(Game game/*, bool saveGame = false*/) => game switch
     {
-        Game.IB2 => "|FK}S];v]!!cw@E4l-gMXa9yDPvRfF*B"u8.ToArray(),
         Game.IB3 => "6nHmjd:hbWNf=9|UO2:?;K0y+gZL-jP5"u8.ToArray(),
-        Game.Vote => "DKksEKHkldF#(WDJ#FMS7jla5f(@J12|"u8.ToArray()
+        Game.IB2 => "|FK}S];v]!!cw@E4l-gMXa9yDPvRfF*B"u8.ToArray(),         // Shared between Coalesced and save file
+        // Game.IB1 when saveGame => throw new NotImplementedException("Haven't gotten around to this yet!"),
+        Game.Vote => "DKksEKHkldF#(WDJ#FMS7jla5f(@J12|"u8.ToArray()         // @TODO verify whether shared between Coalesced and save file
     };
 
     /// <summary>

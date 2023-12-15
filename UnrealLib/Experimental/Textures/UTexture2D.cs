@@ -5,8 +5,8 @@ using UnrealLib.Enums.Textures;
 using UnrealLib.Experimental.UnObj.DefaultProperties;
 using UnrealLib.Interfaces;
 
-namespace UnrealLib.Experimental.Textures
-{
+namespace UnrealLib.Experimental.Textures;
+
     public class UTexture2D(FObjectExport export) : UTexture(export)
     {
         #region Structs
@@ -19,7 +19,7 @@ namespace UnrealLib.Experimental.Textures
 
             public void Serialize(UnrealArchive Ar)
             {
-                // Skips over any inlined data
+            // Read in data header but not the actual data itself. Skips over it if inlined
                 Ar.Serialize(ref Data);
 
                 Ar.Serialize(ref SizeX);
@@ -284,4 +284,3 @@ namespace UnrealLib.Experimental.Textures
         // Not all-inclusive, but covers everything IB has ever used
         public bool IsCompressed() => Format is not (PixelFormat.A32B32G32R32F or PixelFormat.A8R8G8B8 or PixelFormat.G8 or PixelFormat.G16 or PixelFormat.V8U8);
     }
-}

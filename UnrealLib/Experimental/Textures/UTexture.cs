@@ -1,7 +1,7 @@
 ﻿using UnrealLib.Core;
 
-namespace UnrealLib.Experimental.Textures
-{
+namespace UnrealLib.Experimental.Textures;
+
     public class UTexture(FObjectExport export) : USurface(export)
     {
         FUntypedBulkData SourceArt;

@@ -21,7 +21,7 @@ public abstract class FObjectResource
  
     public int TableOffset { get; internal set; }           // File offset of the start of this FObject's header in the table
     public FObjectResource? Outer { get; protected set; }   // This resource's Outer
-    public UnrealPackage Package { get; protected set; }    // The UnrealPackage this export belongs to
+    public UnrealPackage Package { get; set; }    // The UnrealPackage this export belongs to
 #if TRACK_OBJECT_USAGE
     public readonly List<FObjectResource> Users = [];              // List to track objects directly referencing this resource
     public readonly List<FObjectResource> ClassUsers = [];         // List of objects referencing this object as a class
@@ -31,7 +31,7 @@ public abstract class FObjectResource
 
     #region Accessors
 
-    public string GetName() => ObjectName.Name;    // Name of just this object resource
+    public string GetName() => ObjectName.GetString;    // Name of just this object resource
     public string GetFullName()
     {
         var sb = new StringBuilder(GetName());
@@ -108,7 +108,7 @@ public sealed class FObjectExport : FObjectResource, ISerializable
 
     #region Transient members
 
-    public FObjectResource? Class { get; private set; }
+    public FObjectResource? Class { get; set; }
     public FObjectResource? Super { get; private set; }
     public FObjectResource? Archetype { get; private set; }
     public UObject? Object { get; private set; }
@@ -118,6 +118,7 @@ public sealed class FObjectExport : FObjectResource, ISerializable
     #region Acessors
 
     public int GetSerialOffset() => SerialOffset;
+    public int SetSerialOffset(int offset) => SerialOffset = offset;
 
     #endregion
 
