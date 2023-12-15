@@ -1,4 +1,5 @@
-﻿using UnrealLib.Interfaces;
+﻿using System.Diagnostics;
+using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
 
@@ -6,12 +7,12 @@ public class FName : ISerializable
 {
     #region Serialized members
 
-    internal int Index;
-    internal int Number = 0;
+    internal int Index = -1;
+    internal int Number;
 
     #endregion
 
-    #region Transient members
+    #region Transient
 
     public FNameEntry NameEntry { get; internal set; }
 
@@ -19,32 +20,57 @@ public class FName : ISerializable
 
     #region Accessors
 
-    /// <summary>
-    /// Returns the string name of this FName, including its number delimiter if applicable.
-    /// </summary>
-    public string Name => Number < 2 ? NameEntry.Name : $"{NameEntry}_{Number - 1}";
-    public override string ToString() => Name;
+    /// <summary>Returns a reference to this FName's string.</summary>
+    public string GetString => NameEntry.Name;
+    public override string ToString() => GetString;
 
     #endregion
 
-    public void Serialize(UnrealArchive _)
-    {
-        var Ar = (UnrealPackage)_;
+    #region Operators
 
-        Ar.Serialize(ref Index);
-        Ar.Serialize(ref Number);
-
-        // Linking here is SAFE as the name table is serialized before anything else.
-        // This also safeguards against forgetting to link these anywhere in the codebase
-        NameEntry = Ar.GetNameEntry(Index);
-        if (Number > 0) NameEntry.bDoOffset = true;
-    }
-
-    // @TODO fails on null
-    public static bool operator ==(FName a, FName b) => a.Name == b.Name && a.Number == b.Number;
+    public static bool operator ==(FName a, FName b) => a.Number == b.Number && string.Equals(a.GetString, b.GetString, System.StringComparison.OrdinalIgnoreCase);
     public static bool operator !=(FName a, FName b) => !(a == b);
-    public static bool operator ==(FName a, string b) => a.Name.Equals(b);
+    public static bool operator ==(FName a, string b) => string.Equals(a.GetString, b, System.StringComparison.OrdinalIgnoreCase);
     public static bool operator !=(FName a, string b) => !(a == b);
+
+    #endregion
+
+    public void Serialize(UnrealArchive Ar)
+    {
+        if (Ar.IsLoading)
+        {
+            if (Ar.SerializeBinaryProperties)
+            {
+                Ar.Serialize(ref Index);
+                Ar.Serialize(ref Number);
+
+                // Linking here is SAFE as the name table is serialized before anything else.
+                // Casting is pretty dirty but nothing other than UnrealPackages should be using binary FNames so far
+                NameEntry = ((UnrealPackage)Ar).GetNameEntry(Index);
+                if (Number > 0) NameEntry.bDoOffset = true;
+            }
+            else
+            {
+                // Create a new NameEntry to store the string
+                NameEntry = new();
+                Ar.Serialize(ref NameEntry.Name);
+            }
+        }
+        else
+        {
+            if (Ar.SerializeBinaryProperties)
+            {
+                Debug.Assert(Index != -1, "Cannot serialize non-binary FName to binary format");
+
+                Ar.Serialize(ref Index);
+                Ar.Serialize(ref Number);
+            }
+            else
+            {
+                Ar.Serialize(ref NameEntry.Name);
+            }
+        }
+    }
 
     /// <summary>
     /// Attempts to split a numbered name i.e. 'String_3' into separate Name + Number fields.
@@ -65,7 +91,7 @@ public class FName : ISerializable
         if (index <= 0 || index == input.Length) return false;
 
         // If the number is padded i.e. '01' or '00033', return false
-        if (input[index + 1] == '0' && index + 1 != input.Length -1) return false;
+        if (input[index + 1] == '0' && index + 1 != input.Length - 1) return false;
 
         // Return false if number was not a valid integer
         if (!int.TryParse(input[(index + 1)..], out newNumber)) return false;

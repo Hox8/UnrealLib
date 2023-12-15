@@ -66,7 +66,20 @@ public class UnrealArchive : Stream, IDisposable
         InitialLength = data.Length;
     }
 
-    protected void SetStream(Stream stream)
+    public UnrealArchive(string filePath, bool doMemoryStream)
+    {
+        if (!InitFileinfo(filePath, true)) return;
+
+        var buf = File.ReadAllBytes(filePath);
+        _buffer = new MemoryStream();
+        _buffer.Write(buf);
+        // _buffer = new MemoryStream(buf, 0, buf.Length, true, true);
+        _buffer.Position = 0;
+
+        InitialLength = _buffer.Length;
+    }
+
+    public void SetStream(Stream stream)
     {
         _buffer = stream;
     }
@@ -132,6 +145,12 @@ public class UnrealArchive : Stream, IDisposable
     /// Influences whether data is serialized from or to a data source.
     /// </summary>
     public bool IsLoading { get; private set; } = true;
+
+    /// <summary>
+    /// When true, properties use FName serialization. When false, properties are serialized using strings directly.
+    /// Useful for scenarios where there is no name table, such as Infinity Blade saves. 
+    /// </summary>
+    public bool SerializeBinaryProperties { get; set; }= true;
 
     #endregion
 

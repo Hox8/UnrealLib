@@ -1,0 +1,134 @@
+﻿namespace UnrealLib.Experimental.Infinity_Blade;
+
+public enum eTouchRewardActor : byte
+{
+    TRA_Random,
+    TRA_Random_Potion,
+    TRA_Random_Gold,
+    TRA_Random_Key,
+    TRA_Random_Gem,
+    TRA_Random_Item,
+    TRA_None,
+    TRA_Gold_Small,
+    TRA_Gold_Medium,
+    TRA_Gold_Large,
+    TRA_Key_Small,
+    TRA_Key_Medium,
+    TRA_Key_Large,
+    TRA_Key_Item,
+    TRA_Gem_Fixed,
+    TRA_Item_Fixed,
+    TRA_Item_Weapon,
+    TRA_Item_Shield,
+    TRA_Item_Armor,
+    TRA_Item_Helmet,
+    TRA_Item_Magic,
+    TRA_GrabBag_Small,
+    TRA_GrabBag_Medium,
+    TRA_GrabBag_Large,
+    TRA_GrabBag_SmallGem,
+    TRA_GrabBag_MediumGem,
+    TRA_GrabBag_LargeGem,
+    TRA_GrabBag_Uber,
+    TRA_Potion_HealthL,
+    TRA_Potion_HealthRegen,
+    TRA_Potion_ShieldRegen,
+    TRA_Potion_EasyParry,
+    TRA_Potion_HealthM,
+    TRA_Potion_HealthS,
+    TRA_Potion_HealthRegenL,
+    TRA_Potion_DoubleXP,
+    TRA_Potion_New5,
+    TRA_Potion_New6,
+    TRA_Potion_New7,
+    TRA_Potion_New8,
+    TRA_Potion_New9
+};
+
+public enum ClashMobRewardState
+{
+    CMRS_NoState,
+    CMRS_PendingServerAcknowledge,
+    CMRS_PendingPlayerAcknowledge,
+    CMRS_PendingGiveToPlayer
+};
+
+public enum eNewWorldType
+{
+    NWT_SaveStart,
+    NWT_NewBloodline,
+    NWT_NoSave,
+    NWT_NoSave2,
+    NWT_NoSave3,
+    NWT_MinusStart
+};
+
+public enum eElementalType
+{
+    AET_Random,
+    AET_Fire,
+    AET_Ice,
+    AET_Electric,
+    AET_Poison,
+    AET_Light,
+    AET_Dark,
+    AET_Wind,
+    AET_Water
+};
+
+public enum eAchievements
+{
+    A_NONE,
+    IB2_Combo1,
+    IB2_Block1,
+    IB2_Parry1,
+    IB2_Parry2,
+    IB2_Dodge1,
+    IB2_Stab1,
+    IB2_PerfectBlock1,
+    IB2_PerfectParry1,
+    IB2_PerfectSlash1,
+    IB2_Level1,
+    IB2_Level2,
+    IB2_Gold1,
+    IB2_Treasure1,
+    IB2_ModifiedItems1,
+    IB2_GrabBags1,
+    IB2_Master1,
+    IB2_Master2,
+    IB2_InfinityBlade,
+    IB2_ClashMob1,
+    IB2_ClashMob2,
+    IB2_WinWOTakingDamage_SnS,
+    IB2_WinWOTakingDamage_2S,
+    IB2_WinWOTakingDamage_2H,
+    IB2_WinWOAttacking,
+    IB2_AllEquippedModified,
+    IB2_KillUberBoss1,
+    IB2_KillUberBoss2,
+    IB2_KillUberBoss3,
+    IB2_KillUberBoss4,
+    IB2_KillUberBoss5,
+    IB2_NewGamePlus,
+    IB2_KillUberBoss6,
+    IB2_KillUberBoss7,
+    IB2_KillUberBoss8,
+    IB2_KillUberBoss9,
+    IB2_GemCooker1,
+    IB2_GemCooker2,
+    IB2_GemCooker3,
+    IB2_TreasureMapUsed,
+    IB2_TreasureMapCollected,
+    IB2_MeetTEL,
+    IB2_EquipLaserWeapon,
+    IB2_ModifyALaserWeapon,
+    IB2_KillUberBoss10,
+    IB2_KillUberBoss11,
+    IB2_KillUberBoss12,
+    IB2_SpareUberBoss,
+    IB2_FindUberBoss,
+    IB2_GemCooker4,
+    IB2_ItemSet,
+    IB2_NegaGodKing,
+    AIB2_MAX_CHEEVO
+}
