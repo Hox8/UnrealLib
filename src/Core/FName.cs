@@ -46,8 +46,11 @@ public class FName : ISerializable
 
                 // Linking here is SAFE as the name table is serialized before anything else.
                 // Casting is pretty dirty but nothing other than UnrealPackages should be using binary FNames so far
-                NameEntry = ((UnrealPackage)Ar).GetNameEntry(Index);
-                if (Number > 0) NameEntry.bDoOffset = true;
+                if (Ar is UnrealPackage pkg)
+                {
+                    NameEntry = pkg.GetNameEntry(Index);
+                    if (Number > 0) NameEntry.bDoOffset = true;
+                }
             }
             else
             {
