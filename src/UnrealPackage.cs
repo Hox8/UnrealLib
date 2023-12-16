@@ -106,11 +106,9 @@ public class UnrealPackage : UnrealArchive
             outerStr = searchTerm[objIndex..periodIndex];
         }
 
-        // @TODO optimization:
-        // FObjectResources should have a list tracking other FObjectResources using them (direct link only)
-        // This would enable faster name searching at the cost of some memory penalty
-
         // Search for outer and leaf names
+        // Conflicts can theoretically happen if two objects share the same leaf FName AND immediate parent FName
+        // (but different outer somewhere down the line). This will produce accurate results 99.999% of the time, which is fine for now.
         FName? outerName = GetName(outerStr);
         FName? leafName = GetName(objectStr);
 

@@ -8,10 +8,9 @@ public class UField(FObjectExport export) : UObject(export)
 
     public override void Serialize(UnrealArchive Ar)
     {
-        int nextIndex = default;
-
         base.Serialize(Ar);
 
+        int nextIndex = default;
         Ar.Serialize(ref nextIndex);
 
         if (((UnrealPackage)Ar).GetObject(nextIndex) is FObjectExport export && export.Object is UField ufield)

@@ -11,7 +11,7 @@ public class UState(FObjectExport export) : UStruct(export)
     protected int ProbeMask;
     protected StateFlags StateFlags;
     protected short LabelTableOffset;
-    protected List<KeyValuePair<long, int>> FuncMap;   // KeyValuePair<FName, UFunction*>
+    protected List<KeyValuePair<long, int>> FuncMap;
 
     #endregion
 

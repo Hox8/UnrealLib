@@ -4,12 +4,6 @@ using UnrealLib.Experimental.UnObj.DefaultProperties;
 
 namespace UnrealLib.Experimental.UnObj;
 
-// Feeling the limitations of separate UPK / UnrealArchive design...
-// Many things are difficult or feel awkward to do when working with UObject derivatives.
-// Hints at bad design? Maybe a static serializer would be better? How to convey package infos like version and state?
-
-// All of these UObject implementations are very rough and shouldn't be used! Probably.
-
 public class UObject : PropertyHolder
 {
     #region Serialized members

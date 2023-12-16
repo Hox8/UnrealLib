@@ -11,12 +11,12 @@ using UnrealLib.Interfaces;
 namespace UnrealLib;
 
 // @TODO: Have original filepath stats and current filepath stats.
-// Makes using InitFIleInfo() outside of constructor make a lot more sense
+// Would make using InitFIleInfo() outside of constructor make a lot more sense
 
 // @TODO: Investigate the dispose methods of the original UnrealArchive class and port them here
 // @TODO: Clean up and organize things
 
-// Enum should use that EnumExtensions attribute from Nuget
+// @TODO All enums project-wide should use that EnumExtensions attribute from Nuget or similar!
 public class UnrealArchive : Stream, IDisposable
 {
     protected Stream _buffer;

@@ -59,11 +59,13 @@ public class FUntypedBulkData : ISerializable
         ElementCount = 0;
     }
 
+    /// <summary>
+    /// Reads the bulk data from disk into memory. Required stream is detailed in its parent UObject default properties,
+    /// commonly external texture file caches.
+    /// </summary>
+    /// <param name="Ar">An UnrealArchive containing the required data.</param>
     public void ReadData(UnrealArchive Ar)
     {
-        // 1. Read data / allocate uninitialized array
-        // 2. Decompress data if ZLib-compressed
-
         if (!ContainsData) return;
 
         Ar.Position = BulkDataOffsetInFile;
