@@ -10,19 +10,16 @@ using UnrealLib.Interfaces;
 
 namespace UnrealLib;
 
-// I've realized UPK archives and Coalesced archives don't exist without an UnrealArchive being used at some point.
-// Therefore, this class exists to merge the functionality of UnrealArchive abstract class and UnrealArchive stream class.
-// Should make a lot of serializer operations much easier too, especially for UObjects.
+// @TODO: Have original filepath stats and current filepath stats.
+// Makes using InitFIleInfo() outside of constructor make a lot more sense
 
-// @TODO: Follow style I'm using for Core UObject classes- regions for serialized, transient, and accessors etc
-// @TODO: Copy over FileInfo init code from old UnrealArchive.cs here
 // @TODO: Investigate the dispose methods of the original UnrealArchive class and port them here
 // @TODO: Clean up and organize things
 
 // Enum should use that EnumExtensions attribute from Nuget
 public class UnrealArchive : Stream, IDisposable
 {
-    private Stream _buffer;
+    protected Stream _buffer;
     private bool _disposed;
 
     public ArchiveError Error { get; protected set; }
@@ -33,90 +30,47 @@ public class UnrealArchive : Stream, IDisposable
     public string QualifiedPath => FileInfo.FullName;
     public string? DirectoryName => FileInfo.DirectoryName;
     public bool PathIsDirectory => (FileInfo.Attributes & FileAttributes.Directory) != 0;
+    public bool PathExists => (int)FileInfo.Attributes != -1;
 
     public bool StartSaving() => IsLoading = false;
     public bool StartLoading() => IsLoading = true;
 
+    public override string ToString() => FileInfo.Name;
+
     #endregion
 
-    public UnrealArchive() { }
+    #region Constructors
 
-    public UnrealArchive(string filePath, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite)
+    public UnrealArchive(string path, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false)
     {
-        bool pathMustExist = mode is not (FileMode.Create or FileMode.CreateNew or FileMode.OpenOrCreate);
+        if (!SetFileInfo(path)) return;
 
-        _buffer = new FileStream(filePath, mode, access);
-
-        if (!InitFileinfo(filePath, pathMustExist)) return;
-        InitialLength = FileInfo.Length;
-    }
-
-    public UnrealArchive(byte[] data, bool shouldBeResizable = false)
-    {
-        if (shouldBeResizable)
+        if ((makeCopy || (access & FileAccess.Read) != 0) && !PathIsReadable(path))
         {
+            Error = ArchiveError.FailedRead;
+            return;
+        }
+
+        if (makeCopy)
+        {
+            byte[] data = File.ReadAllBytes(path);
             _buffer = new MemoryStream(data.Length);
             _buffer.Write(data);
+            _buffer.Position = 0;
         }
         else
         {
-            _buffer = new MemoryStream(data);
-        }
-
-        InitialLength = data.Length;
-    }
-
-    public UnrealArchive(string filePath, bool doMemoryStream)
-    {
-        if (!InitFileinfo(filePath, true)) return;
-
-        var buf = File.ReadAllBytes(filePath);
-        _buffer = new MemoryStream();
-        _buffer.Write(buf);
-        // _buffer = new MemoryStream(buf, 0, buf.Length, true, true);
-        _buffer.Position = 0;
-
-        InitialLength = _buffer.Length;
-    }
-
-    public void SetStream(Stream stream)
-    {
-        _buffer = stream;
-    }
-
-    protected bool InitFileinfo(string filePath, bool pathMustExist)
-    {
-        if (string.IsNullOrWhiteSpace(filePath))
-        {
-            Error = ArchiveError.PathInvalid;
-            return false;
-        }
-
-        FileInfo = new FileInfo(filePath);
-
-        try
-        {
-            // -1 indicates no attributes, meaning the path does not exist
-            if ((int)FileInfo.Attributes == -1)
+            if ((access & FileAccess.Write) != 0 && !PathIsWritable(path))
             {
-                // If we don't care about existence (probably saving), don't set error.
-                // We must still access FileInfo attrs to catch exceptions caused by invalid paths
-                if (pathMustExist)
-                {
-                    Error = ArchiveError.PathNonexistent;
-                    return false;
-                }
+                Error = ArchiveError.FailedWrite;
+                return;
             }
-        }
-        catch
-        {
-            // If we've caught an exception, that means that path was malformed
-            Error = ArchiveError.PathInvalid;
-            return false;
-        }
 
-        return true;
+            _buffer = File.Open(path, mode, access);
+        }
     }
+
+    #endregion
 
     #region Core
 
@@ -129,12 +83,13 @@ public class UnrealArchive : Stream, IDisposable
     /// Returns the Game this Archive's version corresponds to.
     /// </summary>
     /// <remarks>IB2 and VOTE!!! are synonymous.</remarks>
-    public Game Game
-    {
-        // Latest version of IB2 is saved with 864, but I believe this is incorrect. Treat IB2 as 842 for now.
-        get => Version switch { > 864 => Game.IB3, > 788 => Game.IB2, 788 => Game.IB1, _ => Game.Unknown };
-        protected set => Version = value switch { Game.IB3 => 868, Game.IB2 or Game.Vote => 842, Game.IB1 => 788, _ => 0 };
-    }
+    public Game Game { get; set; }
+    //{
+    //    // @TODO This has been commented out as VOTE!!! was impossible to get/set. Required for Coalesced
+    //    // Latest version of IB2 is saved with 864, but I believe this is incorrect. Treat IB2 as 842 for now.
+    //    get => Version switch { > 864 => Game.IB3, > 788 => Game.IB2, 788 => Game.IB1, _ => Game.Unknown };
+    //    protected set => Version = value switch { Game.IB3 => 868, Game.IB2 or Game.Vote => 842, Game.IB1 => 788, _ => 0 };
+    //}
 
     /// <summary>
     /// When true, strings will always be serialized as UTF-16.
@@ -150,14 +105,84 @@ public class UnrealArchive : Stream, IDisposable
     /// When true, properties use FName serialization. When false, properties are serialized using strings directly.
     /// Useful for scenarios where there is no name table, such as Infinity Blade saves. 
     /// </summary>
-    public bool SerializeBinaryProperties { get; set; }= true;
+    public bool SerializeBinaryProperties { get; set; } = true;
 
     #endregion
 
-    #region File IO and stat tracking
+    #region IO & utilities
 
     protected FileInfo FileInfo;
     public long InitialLength { get; protected set; }
+
+    public static bool PathIsWritable(string path)
+    {
+        try
+        {
+            var fileOptions = new FileStreamOptions { Access = FileAccess.Write, Mode = FileMode.OpenOrCreate };
+
+            if (!Path.Exists(path))
+            {
+                // We don't want to set this for pre-existing files
+                fileOptions.Options |= FileOptions.DeleteOnClose;
+            }
+
+            using (File.Open(path, fileOptions)) ;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool PathIsReadable(string path)
+    {
+        try
+        {
+            using (File.OpenRead(path)) ;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool PathIsValid(string path)
+    {
+        try
+        {
+            var fi = new FileInfo(path);
+            if ((int)fi.Attributes == -1) ; // Dummy check. An exception is raised here if the path is invalid
+            
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Sets the filepath and other related metadata. Does not affect the underlying stream!
+    /// </summary>
+    /// <param name="filePath"></param>
+    /// <returns></returns>
+    protected bool SetFileInfo(string filePath)
+    {
+        if (_buffer is FileStream) throw new NotImplementedException();
+
+        if (!PathIsValid(filePath))
+        {
+            Error = ArchiveError.PathInvalid;
+            return false;
+        }
+
+        FileInfo = new FileInfo(filePath);
+        InitialLength = PathIsDirectory ? -1 : FileInfo.Length;
+
+        return true;
+    }
 
     #endregion
 
@@ -174,6 +199,9 @@ public class UnrealArchive : Stream, IDisposable
         FailedDecompress,
         FailedDelete,
         FailedSave,
+
+        RequiresFile,
+        RequiresFolder,
 
         PathInvalid,
         PathNonexistent,
@@ -198,6 +226,9 @@ public class UnrealArchive : Stream, IDisposable
         ArchiveError.FailedDecompress => "Failed to decompress file",
         ArchiveError.FailedDelete => "Failed to remove path",
         ArchiveError.FailedSave => "Failed to perform a save",
+
+        ArchiveError.RequiresFile => "Operation requires a file",
+        ArchiveError.RequiresFolder => "Operation requires a folder",
 
         ArchiveError.UnsupportedDecompress => "Compressed archives are not supported"
     };
@@ -455,11 +486,9 @@ public class UnrealArchive : Stream, IDisposable
     #endregion
 
     public virtual void Load() { }
-    public virtual long Save()
+    public virtual long Save(string? newPath = null)
     {
-        if (FileInfo is null) return -1;
-
-        Position = 0;
+        if (HasError || (newPath is not null && !SetFileInfo(newPath))) return -1;
 
         try
         {
@@ -483,18 +512,6 @@ public class UnrealArchive : Stream, IDisposable
 
         return Length;
     }
-
-    /// <summary>
-    /// Save overload for where we want to save to a different path.
-    /// </summary>
-    /// <param name="newFilePath"></param>
-    public long Save(string newFilePath)
-    {
-        InitFileinfo(newFilePath, false);
-        return Save();
-    }
-
-    public override string ToString() => FileInfo.Name;
 
     public new void Dispose()
     {
