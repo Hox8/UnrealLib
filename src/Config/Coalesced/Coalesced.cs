@@ -16,87 +16,98 @@ public class Coalesced : UnrealArchive
     private const string HelperName = "ibhelper";
 
     // MemoryStream must be resizable (ECB padding, addition of Inis/Sections/Properties)
-    public Coalesced(string filePath, Game game = Game.Unknown) : base()
+    public Coalesced(string path, Game game = Game.Unknown) : base(path, makeCopy: true)
     {
-        InitFileinfo(filePath, true);
-
-        var memoryStream = new MemoryStream();
-        SetStream(memoryStream);
-
-        if (!PathIsDirectory)
+        if (PathIsDirectory)
         {
-            memoryStream.Write(File.ReadAllBytes(filePath));
-            InitialLength = Length;
+            _buffer = new MemoryStream();
+
+            // Base constructor will set this, but we don't care about it here
+            if (Error is ArchiveError.FailedRead) Error = ArchiveError.None;
         }
-
-        Game = game;
-
-        Load();
     }
 
+    /// <summary>
+    /// Loads a Coalesced file from disk.
+    /// </summary>
     public override void Load()
     {
         if (HasError) return;
 
-        // Read in Coalesced file
-        if (!PathIsDirectory)
+        if (PathIsDirectory)
         {
-            if (!TryDecrypt())
-            {
-                Error = ArchiveError.FailedDecrypt;
-                return;
-            }
-
-            try
-            {
-                Position = 0;
-                Serialize(ref Inis);
-            }
-            catch
-            {
-                Error = ArchiveError.FailedParse;
-                return;
-            }
-
-            // Error if the Coalesced file belongs to a game we weren't expecting
-            if (Game is not Game.Unknown && Game != _decryptedWith)
-            {
-                Error = ArchiveError.UnexpectedGame;
-                return;
-            }
-
-            Game = _decryptedWith;
+            Error = ArchiveError.RequiresFile;
+            return;
         }
-#if WITH_COALESCED_EDITOR
-        // Read in Coalesced folder
-        else
+
+        if (!TryDecrypt())
         {
-            // Locate the helper file so we know how to encrypt the files
-            if (!ParseHelperFile(Path.Combine(QualifiedPath, HelperName)))
-            {
-                Error = ArchiveError.InvalidCoalescedFolder;
-                return;
-            }
-
-            foreach (var entry in Directory.GetFiles(QualifiedPath, "*.*", SearchOption.AllDirectories))
-            {
-                if (!Path.HasExtension(entry)) continue;
-                string extension = Path.GetExtension(entry)[1..].ToUpperInvariant();
-
-                // Filter out unsupported extensions
-                if (!extension.Equals("INI") && Globals.GetLanguages(Game).IndexOf(extension) == -1) continue;
-
-                var ini = new Ini(entry, true);
-                ini.Path = "..\\..\\" + ini.Path[(FileInfo.FullName.Length + 1)..].Replace('/', '\\');
-                Inis.Add(ini);
-            }
+            Error = ArchiveError.FailedDecrypt;
+            return;
         }
-#endif
+
+        try
+        {
+            Position = 0;
+            Serialize(ref Inis);
+        }
+        catch
+        {
+            Error = ArchiveError.FailedParse;
+            return;
+        }
+
+        // Error if the Coalesced file belongs to a game we weren't expecting
+        if (Game is not Game.Unknown && Game != _decryptedWith)
+        {
+            Error = ArchiveError.UnexpectedGame;
+            return;
+        }
+
+        Game = _decryptedWith;
     }
 
-    public override long Save()
+    /// <summary>
+    /// Loads a Coalesced folder from disk.
+    /// </summary>
+    public void LoadFolder()
     {
-        if (HasError) return -1;
+        if (HasError) return;
+
+        if (!PathIsDirectory)
+        {
+            Error = ArchiveError.RequiresFolder;
+            return;
+        }
+
+        // Locate the helper file so we know how to encrypt the files
+        if (!ParseHelperFile(Path.Combine(QualifiedPath, HelperName)))
+        {
+            Error = ArchiveError.InvalidCoalescedFolder;
+            return;
+        }
+
+        foreach (var entry in Directory.GetFiles(QualifiedPath, "*.*", SearchOption.AllDirectories))
+        {
+            if (!Path.HasExtension(entry)) continue;
+            string extension = Path.GetExtension(entry)[1..].ToUpperInvariant();
+
+            // Filter out unsupported extensions
+            if (!extension.Equals("INI") && Globals.GetLanguages(Game).IndexOf(extension) == -1) continue;
+
+            var ini = new Ini(entry, true);
+            ini.Path = "..\\..\\" + ini.Path[(FileInfo.FullName.Length + 1)..].Replace('/', '\\');
+            Inis.Add(ini);
+        }
+    }
+
+    /// <summary>
+    /// Saves to a Coalesced file on disk.
+    /// </summary>
+    /// <returns>Number of bytes written.</returns>
+    public override long Save(string? newPath = null)
+    {
+        if (HasError || (newPath is not null && !SetFileInfo(newPath))) return -1;
 
         ForceUTF16 = Options.ForceUnicode;
 
@@ -118,43 +129,44 @@ public class Coalesced : UnrealArchive
 
             return base.Save();
         }
-#if WITH_COALESCED_EDITOR
-        // Save Coalesced folder
-        else
-        {
-            try
-            {
-                if (Directory.Exists(QualifiedPath)) Directory.Delete(QualifiedPath, true);
-                Directory.CreateDirectory(QualifiedPath);
-            }
-            catch
-            {
-                Error = ArchiveError.FailedDelete;
-                return -1;
-            }
 
-            var iniOptions = new IniOptions(Options);
-            foreach (var ini in Inis)
-            {
-                // Strip relative segment and replace separator chars in favor of Unix systems
-                string outputPath = Path.Combine(QualifiedPath, ini.Path[6..].Replace('\\', '/'));
-                string outputDir = Path.GetDirectoryName(outputPath);
-
-                Directory.CreateDirectory(outputDir);
-                ini.Save(outputPath, iniOptions);
-            }
-
-            // Write Game to disk so we know how to re-encrypt the folder later
-            string helperPath = Path.Combine(Path.ChangeExtension(QualifiedPath, null), HelperName);
-            File.WriteAllBytes(helperPath, [(byte)_decryptedWith]);
-            File.SetAttributes(helperPath, FileAttributes.Hidden);
-
-            return 0;
-        }
-#else
         Error = ArchiveError.FailedSave;
         return -1;
-#endif
+    }
+
+    public long SaveFolder(string folderPath)
+    {
+        if (HasError || !SetFileInfo(folderPath)) return -1;
+
+        try
+        {
+            if (Directory.Exists(QualifiedPath)) Directory.Delete(QualifiedPath, true);
+            Directory.CreateDirectory(QualifiedPath);
+        }
+        catch
+        {
+            Error = ArchiveError.FailedDelete;
+            return -1;
+        }
+
+        var iniOptions = new IniOptions(Options);
+        foreach (var ini in Inis)
+        {
+            // Strip relative segment and replace separator chars in favor of Unix systems
+            string outputPath = Path.Combine(QualifiedPath, ini.Path[6..].Replace('\\', '/'));
+            string outputDir = Path.GetDirectoryName(outputPath);
+
+            Directory.CreateDirectory(outputDir);
+            ini.Save(outputPath, iniOptions);
+        }
+
+        // Write Game to disk so we know how to re-encrypt the folder later
+        string helperPath = Path.Combine(Path.ChangeExtension(QualifiedPath, null), HelperName);
+
+        File.WriteAllBytes(helperPath, [(byte)_decryptedWith]);
+        File.SetAttributes(helperPath, FileAttributes.Hidden);
+
+        return 0;
     }
 
     private bool TryDecrypt()
@@ -190,8 +202,6 @@ public class Coalesced : UnrealArchive
     }
 
     #region Helpers
-
-#if WITH_COALESCED_EDITOR
     private bool ParseHelperFile(string path)
     {
         if (File.Exists(path))
@@ -208,7 +218,6 @@ public class Coalesced : UnrealArchive
 
         return true;
     }
-#endif
 
     public bool TryGetIni(string iniName, out Ini result)
     {

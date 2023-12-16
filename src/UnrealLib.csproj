@@ -6,10 +6,7 @@
 		<Nullable>enable</Nullable>
 		<IsAotCompatible>true</IsAotCompatible>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-
-		<!-- When enabled, allows saving Coalesced files to folders and vice-versa. Adds an ~80kb size increase, even if unused. -->
-		<!--<DefineConstants>WITH_COALESCED_EDITOR</DefineConstants>-->
-
+		
 		<!-- Toggles constructing object dependency graphs (EARLY, unoptimized) -->
 		<!-- Has a noticeable impact on memory usage, and have very low usage realistically (use Lazy<T>). -->
 		<!-- CURRENTLY SERVES NO PURPOSE. DO NOT USE! -->
