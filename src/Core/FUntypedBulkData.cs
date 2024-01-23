@@ -1,7 +1,6 @@
-﻿using Ionic.Zlib;
-using System;
+﻿using System;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
+using UnrealLib.Core.Compression;
 using UnrealLib.Enums;
 using UnrealLib.Interfaces;
 
@@ -35,7 +34,19 @@ public class FUntypedBulkData : ISerializable
     public ReadOnlySpan<byte> DataView => BulkData;
     public Span<byte> Data => BulkData;
 
+    public int Offset => BulkDataOffsetInFile;
+    public int Size => BulkDataSizeOnDisk;
+
     #endregion
+
+    public FUntypedBulkData() { }
+    public FUntypedBulkData(BulkDataFlags flags, int uncompressedSize, int sizeInFile, int offsetInFile)
+    {
+        BulkDataFlags = flags;
+        ElementCount = uncompressedSize;
+        BulkDataSizeOnDisk = sizeInFile;
+        BulkDataOffsetInFile = offsetInFile;
+    }
 
     public void Serialize(UnrealArchive Ar)
     {
@@ -53,12 +64,6 @@ public class FUntypedBulkData : ISerializable
         }
     }
 
-    public void RemoveBulkData()
-    {
-        BulkData = null;
-        ElementCount = 0;
-    }
-
     /// <summary>
     /// Reads the bulk data from disk into memory. Required stream is detailed in its parent UObject default properties,
     /// commonly external texture file caches.
@@ -66,80 +71,30 @@ public class FUntypedBulkData : ISerializable
     /// <param name="Ar">An UnrealArchive containing the required data.</param>
     public void ReadData(UnrealArchive Ar)
     {
+        // If stored in separate file, how to write? Open and close? Find a shared stream?
+        if (!Ar.IsLoading) throw new NotImplementedException();
+
         if (!ContainsData) return;
 
         Ar.Position = BulkDataOffsetInFile;
 
-        // Allocate buffer for uncompressed data.
-        BulkData = GC.AllocateUninitializedArray<byte>(ElementCount);
-
         if (IsStoredCompressed)
         {
-            if (!ZLibCompressed)
+            if (!ZLibCompressed) throw new Exception("ZLib is the only supported compression scheme");
+
+            if (Ar.IsLoading)
             {
-                // iOS only supports ZLib. I have no plans to support other forms of compression.
-                throw new NotImplementedException("ZLib is the only supported compression method");
+                // This is not a good idea. Array should be sized and passed in beforehand
+                BulkData = GC.AllocateUninitializedArray<byte>(ElementCount);
+                CompressionManager.Decompress(Ar._buffer, BulkData);
             }
-            
-            DecompressZLib(Ar);
+            else
+            {
+            }
         }
         else
         {
-            Ar.ReadExactly(BulkData);
-            return;
-        }
-    }
-
-    public static void DecompressZLibStatic(UnrealArchive Ar)
-    {
-        var buffer = Ar.GetBufferRaw();
-
-        using var zlibstream = new ZlibStream(Ar, CompressionMode.Decompress, true);
-
-        int bytesRead = zlibstream.Read(buffer);
-    }
-
-    // CRUDE ZLib impl.
-    // Very inefficient; look into pooling and make this method static so as to not lock behind FUntypedBulkData
-    private void DecompressZLib(UnrealArchive Ar)
-    {
-        int packageTag = 0, chunkSize = 0;
-        int compressedSize = 0, uncompressedSize = 0;
-
-        // Read in package tag
-        Ar.Serialize(ref packageTag);
-        if ((uint)packageTag != Globals.PackageTag)
-        {
-            throw new Exception("Invalid package tag!");
-        }
-
-        // Read in chunk size? Can this change?
-        Ar.Serialize(ref chunkSize);
-        if (chunkSize != Globals.CompressionChunkSize)
-        {
-            throw new Exception("Unexpected compression chunk size!");
-        }
-
-        // Read in [un]compressed sizes
-        Ar.Serialize(ref compressedSize);
-        Ar.Serialize(ref uncompressedSize);
-
-        // Determine chunk count based on uncompressed size
-        int totalChunkCount = (uncompressedSize + Globals.CompressionChunkSize - 1) / Globals.CompressionChunkSize;
-
-        // Allocate and read totalChunkCount compression chunk infos
-        var chunks = new FCompressedChunkInfo[totalChunkCount];
-        Ar.ReadExactly(MemoryMarshal.Cast<FCompressedChunkInfo, byte>(chunks));
-
-        // Read in and inflate all chunks
-        int bytesRead = 0;
-        for (int i = 0; i < chunks.Length; i++)
-        {
-            // This works, but not how I want it to. @TODO
-            using var zlibstream = new ZlibStream(Ar, CompressionMode.Decompress, true);
-            zlibstream.BufferSize = chunks[i].CompressedSize;   // Read() reads BufferSize bytes regardless of length passed?
-
-            bytesRead += zlibstream.Read(BulkData.AsSpan(bytesRead, chunks[i].UncompressedSize));
+            Ar.Serialize(ref BulkData, ElementCount);
         }
     }
 }
