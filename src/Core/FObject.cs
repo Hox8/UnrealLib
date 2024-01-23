@@ -34,7 +34,7 @@ public abstract class FObjectResource
     public string GetName() => ObjectName.GetString;    // Name of just this object resource
     public string GetFullName()
     {
-        var sb = new StringBuilder(GetName());
+        var sb = new StringBuilder(ObjectName.GetStringNumbered);
 
         for (FObjectResource outer = Outer; outer is not null; outer = outer.Outer)
         {
@@ -111,7 +111,7 @@ public sealed class FObjectExport : FObjectResource, ISerializable
     public FObjectResource? Class { get; set; }
     public FObjectResource? Super { get; private set; }
     public FObjectResource? Archetype { get; private set; }
-    public UObject? Object { get; private set; }
+    public UObject? Object { get; internal set; }
 
     #endregion
 
