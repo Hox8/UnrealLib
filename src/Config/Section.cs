@@ -7,79 +7,20 @@ namespace UnrealLib.Config;
 public class Section : ISerializable
 {
     public string Name;
-    public List<Property> Properties = new();
+    public List<Property> Properties = [];
 
-    /// <summary>
-    /// Parameterless constructor. Used internally by UnrealArchive serializer.
-    /// </summary>
+    #region Constructors
+
     public Section() { }
 
-    /// <summary>
-    /// Creates a new blank <see cref="Section"/> using the specified name.
-    /// </summary>
     public Section(string name)
     {
         Name = name;
     }
 
-    /// <summary>
-    /// 'Updates' this section's list of properties by parsing a line representing a key/value pair while taking into account special operators: '!' '-' '+' '.'
-    /// </summary>
-    public void UpdateProperty(string line)
-    {
-        // Do not process empty lines
-        if (string.IsNullOrWhiteSpace(line)) return;
-
-        string[] sub = line.Split('=', 2, StringSplitOptions.TrimEntries);
-
-        string key = sub[0];
-        string value = sub.Length == 2 ? sub[1] : "";
-
-        // Take a property line i.e. 'Key=Value' and do things with it
-        // Use special prefixes to denote action: '!', '+', '.', '-'.
-        // See https://docs.unrealengine.com/5.3/en-US/configuration-files-in-unreal-engine/
-
-        // Get a copy of the property without the special character if one was used
-        var prop = key[0] switch
-        {
-            '!' or '-' or '+' or '.' => new Property(key[1..], value),
-            _ => new Property(key, value)
-        };
-
-        switch (key[0])
-        {
-            // Remove all instances of the key
-            // Suited for emptying arrays / removing all keys of the same name
-            case '!':
-                Properties.RemoveAll(p => p.Key.Equals(prop.Key, StringComparison.OrdinalIgnoreCase));
-                break;
-
-            // Remove matching key/value
-            // Suited for removing a specific array entry
-            case '-':
-                Properties.RemoveAll(p => p.Key.Equals(prop.Key, StringComparison.OrdinalIgnoreCase) && p.Value.Equals(prop.Value, StringComparison.OrdinalIgnoreCase));
-                break;
-
-            // Add if not already present
-            // Suited for idk. Seems pretty useless to me
-            case '+':
-                if (!TryGetProperty(prop.Key, out _)) Properties.Add(prop);
-                break;
-
-            // Add regardless
-            // Suited for arrays where multiple keys with different values are necessary
-            case '.':
-            default:
-                Properties.Add(prop);
-                break;
-        }
-    }
+    #endregion
 
     #region Getters and Setters
-
-    // @TODO: Using generics over explicit method overloads.
-    // This allows for nicer design in some areas but sacrificing 'type'.Parse() for Convert.ChangeType().
-    // What are the performance implications? BENCHMARK ME.
 
     public T GetValue<T>(string key)
     {
@@ -115,34 +56,6 @@ public class Section : ISerializable
     }
 
     /// <summary>
-    /// Attempts to parse a single-line array from a <see cref="Property"/>.
-    /// </summary>
-    /// <returns>True if the <see cref="Property"/> was found and parsed successfully, otherwise false.</returns>
-    //public bool GetArraySingleLine(string keyName, out string[] result)
-    //{
-    //    if (TryGetProperty(keyName, out var prop))
-    //    {
-    //        if (string.IsNullOrEmpty(prop.Value) || prop.Value[0] != '(' || prop.Value[^1] != ')')
-    //        {
-    //            result = default;
-    //            return false;
-    //        }
-
-    //        result = prop.Value[1..^1].Split(',');
-    //        return true;
-    //    }
-
-    //    result = default;
-    //    return false;
-    //}
-
-    //public void SetArraySingleLine(string keyName, string[] value) => SetString(keyName, $"({string.Join(',', value)})");
-
-    #endregion
-
-    #region Helpers
-
-    /// <summary>
     /// Searches for the last instance of a property within a section.
     /// </summary>
     /// <param name="key">The key name of the property to search for.</param>
@@ -164,25 +77,122 @@ public class Section : ISerializable
         return false;
     }
 
-    public bool TryAddProperty(string key, out Property result)
+    public bool TryAddProperty(string key, out Property outProperty)
     {
-        if (!TryGetProperty(key, out result))
+        if (!TryGetProperty(key, out outProperty))
         {
-            result = new Property { Key = key };
-            Properties.Add(result);
+            outProperty = new Property { Key = key };
+            Properties.Add(outProperty);
             return true;
         }
 
         return false;
     }
 
+    // Adds a property to Properties unconditionally.
+    public void AddProperty(string iniLine) => Properties.Add(new Property(iniLine));
+
     #endregion
+
+    #region Accessors
+
+    public override string ToString() => $"{Name}, {Properties.Count} properties";
+
+    #endregion
+
+    private enum ArrayOperator
+    {
+        Clear,      // Clear out all array entries
+        Remove,
+        AddConditional,
+        AddUnconditional,
+    }
+
+    /// <summary>
+    /// Updates this section's Properties in way similar to how ini defaults work. @TODO elaborate
+    /// </summary>
+    public void ParseProperty(string iniLine)
+    {
+        var property = new Property(iniLine);
+
+        // Don't process comments or invalid properties
+        if (property.IsComment || string.IsNullOrWhiteSpace(property.Key)) return;
+
+        ArrayOperator operation;
+
+        // Get array operator
+        switch (property.Key[0])
+        {
+            // Array operator prefix present. Parse, and remove from Key
+            case '!' or '-' or '+' or '.':
+                operation = property.Key[0] switch
+                {
+                    '-' => ArrayOperator.Remove,
+                    '+' => ArrayOperator.AddConditional,
+                    '.' => ArrayOperator.AddUnconditional,
+                    _ => ArrayOperator.Clear
+                };
+                property.Key = property.Key[1..];
+                break;
+
+            // Array operator prefix not present. Default to Clear
+            default:
+                operation = ArrayOperator.Clear;
+                break;
+        }
+
+        // Parse property according to ArrayOperator type
+        switch (operation)
+        {
+            // Remove all properties with a matching Key
+            // This is the default behavior if no prefix is passed!
+            case ArrayOperator.Clear:
+                Properties.RemoveAll(p => property.Key.Equals(p.Key, StringComparison.OrdinalIgnoreCase));
+                break;
+
+            // Removes the last property with a matching Key and Value
+            // @TODO should this remove all properties or just the first one found?
+            case ArrayOperator.Remove:
+                foreach (var prop in Properties)
+                {
+                    if (property.EqualsCaseInsensitive(prop))
+                    {
+                        Properties.Remove(prop);
+                        break;
+                    }
+                }
+                break;
+
+            // Add property if its value is not already present
+            case ArrayOperator.AddConditional:
+                bool shouldAdd = true;
+
+                foreach (var prop in Properties)
+                {
+                    if (property.EqualsCaseInsensitive(prop))
+                    {
+                        shouldAdd = false;
+                        break;
+                    }
+                }
+
+                if (shouldAdd)
+                {
+                    Properties.Add(property);
+                }
+
+                break;
+
+            // Add property unconditionally
+            case ArrayOperator.AddUnconditional:
+                Properties.Add(property);
+                break;
+        }
+    }
 
     public void Serialize(UnrealArchive Ar)
     {
         Ar.Serialize(ref Name);
         Ar.Serialize(ref Properties);
     }
-
-    public override string ToString() => $"[{Name}]";
 }

@@ -1,161 +1,106 @@
-// @TODO:
-// - Add getters and setters for: bool, int, float, (array?).
-// - Add documentation
-// - Add a serializer option to remove malformed data. Currently malformed data are converted to empty properties
-
-// @Big TODO
-// Serializer options only apply when writing text inis. Binary files do NOT take into account any serializer options!
-
-// @TODO: Enforce unique sections should not be optional as inis should adhere to the official spec.
-
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using UnrealLib.Config.Coalesced;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Config;
 
-public class Ini : ISerializable
+public enum IniError : byte
+{
+    None = 0,
+    NonExist,
+    FailedRead,
+    FailedWrite,
+    ContainsDuplicateSection
+}
+
+public class Ini : ErrorHelper<IniError>, ISerializable
 {
     public string Path;
-    public List<Section> Sections = new();
+    public Section GlobalSection = new("");
+    public List<Section> Sections = [];
     public IniOptions Options = new();
 
-    public Section Globals = new();
-    public bool HasDuplicateSections = false;
-    public bool Modified = false;
+    #region Constructors
 
-    // ERROR
-    public string Context;
-    public string Description;
-
-    /// <summary>
-    /// Parameterless constructor. Used internally by UnrealArchive serializer.
-    /// </summary>
     public Ini() { }
 
-    /// <summary>
-    /// Constructs a new <see cref="Ini"/> instance and reads a file into it.
-    /// </summary>
-    public Ini(string filePath, bool enforceUniqueSections = false)
+    public static Ini FromFile(string path)
     {
-        Path = filePath;
-        Open(enforceUniqueSections: enforceUniqueSections);
-    }
+        var ini = new Ini { Path = path };
 
-    #region IO Methods
+        string[] lines;
 
-    public void Open(string? filePath = null, bool enforceUniqueSections = true)
-    {
-        // If a file override wasn't passed, use existing value
-        filePath ??= Path;
-
-        var curSection = Globals;
-        foreach (string line in File.ReadLines(filePath))
+        try
         {
-            if (string.IsNullOrEmpty(line)) continue;
+            lines = File.ReadAllLines(path);
+        }
+        catch
+        {
+            ini.SetError(File.Exists(path) ? IniError.NonExist : IniError.FailedRead, path);
+            return ini;
+        }
+
+        // Initially set to global section
+        var curSection = ini.GlobalSection;
+
+        foreach (string line in lines)
+        {
+            if (string.IsNullOrWhiteSpace(line)) continue;
+
             if (line[0] == '[' && line[^1] == ']')
             {
-                // Add new section to Sections
-                if (!TryAddSection(line[1..^1], out curSection))
+                // Exit early if we encounter a duplicate section
+                if (!ini.TryAddSection(line[1..^1], out curSection))
                 {
-                    HasDuplicateSections = true;
-                    Context = curSection.Name;
-                    
-                    if (enforceUniqueSections) return;
+                    ini.SetError(IniError.ContainsDuplicateSection, curSection.Name);
+                    return ini;
                 }
+
                 continue;
             }
 
-            // Add line to curSection's properties
-            curSection.Properties.Add(new Property(line));
-        }
-    }
-
-    public void Save(string? filePath = null, IniOptions? options = null)
-    {
-        // If a file override wasn't passed, use existing value
-        filePath ??= Path;
-
-        // If an options override wasn't passed, use existing values
-        options ??= Options;
-
-        using var sw = new StreamWriter(filePath);
-
-        if (Options.KeepGlobals && Globals.Properties.Count > 0)
-        {
-            WriteSectionToDisk(sw, options, Globals);
-
-            // If there are sections to follow, separate with a newline
-            if (Sections.Count > 0) sw.WriteLine();
+            curSection.AddProperty(line);
         }
 
-        for (var i = 0; i < Sections.Count; i++)
-        {
-            WriteSectionToDisk(sw, options, Sections[i]);
-
-            // If there are more sections to follow, separate with a newline
-            if (i != Sections.Count - 1) sw.WriteLine();
-        }
+        return ini;
     }
 
     #endregion
 
-    #region Getters and Setters
+    #region Getters/Setters
 
-    public bool GetValue<T>(string key, string section, out T value)
+    public bool TryGetSection(string sectionName, out Section outSection)
     {
-        if (TryGetSection(section, out var _section))
-        {
-            return _section.GetValue(key, out value);
-        }
-
-        value = default;
-        return false;
-    }
-
-    public void SetValue<T>(string key, string section, T value)
-    {
-        if (!TryGetSection(section, out var _section))
-        {
-            _section = new Section(key);
-            Sections.Add(_section);
-        }
-
-        _section.SetValue(key, value);
-    }
-
-    #endregion
-
-    #region Helpers
-
-    public bool TryGetSection(string sectionName, out Section? result)
-    {
-        bool clearProperties = false;
-
-        // Special. Clears section's properties
-        if (sectionName.StartsWith('!'))
-        {
-            sectionName = sectionName[1..];
-            clearProperties = true;
-        }
-
         foreach (var section in Sections)
         {
             if (section.Name.Equals(sectionName, StringComparison.OrdinalIgnoreCase))
             {
-                result = section;
-                if (clearProperties) result.Properties.Clear();
-
+                outSection = section;
                 return true;
             }
         }
 
-        result = default;
+        outSection = null;
         return false;
     }
 
+    // Returns true if section was added. False if it already exists.
+    public bool TryAddSection(string sectionName, out Section outSection)
+    {
+        if (TryGetSection(sectionName, out outSection))
+        {
+            return false;
+        }
+
+        outSection = new Section(sectionName);
+        Sections.Add(outSection);
+        return true;
+    }
+
+    // Returns true if removed. False if not.
     public bool TryRemoveSection(string sectionName)
     {
         if (TryGetSection(sectionName, out var section))
@@ -167,59 +112,93 @@ public class Ini : ISerializable
         return false;
     }
 
-    public bool TryAddSection(string sectionName, out Section result)
+    #endregion
+
+    #region ErrorHelper
+
+    public override string GetErrorString() => ErrorType switch
     {
-        if (!TryGetSection(sectionName, out result))
+        IniError.None => "No error.",
+        IniError.NonExist => $"'{ErrorContext}' does not exist.",
+        IniError.FailedRead => $"Failed to read from '{ErrorContext}'.",
+        IniError.FailedWrite => $"Failed to write to '{ErrorContext}'.",
+        IniError.ContainsDuplicateSection => $"Contains duplicate section: '{ErrorContext}'."
+    };
+
+    #endregion
+
+    #region Accessors
+
+    public override string ToString() => $"{Path}, {Sections.Count} sections";
+    public string FriendlyName => Path.StartsWith("..\\..\\") ? Path[6..] : Path;
+
+    #endregion
+
+    public long SaveToFile(string path)
+    {
+        if (HasError) throw new NotImplementedException();  // come back to this later
+
+        // StringBuilder or StreamWriter? Probably the latter.
+        var sb = new StringBuilder();
+
+        // Save global section
+        if (Options.KeepGlobals)
         {
-            result = new Section(sectionName);
-            Sections.Add(result);
-            return true;
+            // Used to print a newline only if at least one global property was serialized
+            bool writtenAtLeastOnce = false;
+
+            foreach (var property in GlobalSection.Properties)
+            {
+                if (!Options.KeepComments && property.IsComment) continue;
+
+                sb.Append($"{property}\n");
+                writtenAtLeastOnce = true;
+            }
+
+            if (writtenAtLeastOnce) sb.Append('\n');
         }
 
-        return false;
-    }
-
-    /*private Section? GetSection(string sectionName)
-    {
-        foreach (var section in Sections)
+        // Save regular sections
+        for (int i = 0; i < Sections.Count; i++)
         {
-            if (section.Name.Equals(sectionName, StringComparison.OrdinalIgnoreCase))
+            if (!Options.KeepEmptySections && Sections[i].Properties.Count == 0) continue;
+
+            sb.Append($"[{Sections[i].Name}]\n");
+
+            foreach (var property in Sections[i].Properties)
             {
-                return section;
+                if (!Options.KeepComments && property.IsComment) continue;
+
+                sb.Append($"{property}\n");
+            }
+
+            // If there are more sections to follow, add a newline
+            if (i + 1 != Sections.Count)
+            {
+                sb.Append('\n');
             }
         }
 
-        return null;
-    }*/
+        byte[] buffer = Encoding.UTF8.GetBytes(sb.ToString());
 
-    private static void WriteSectionToDisk(StreamWriter sw, IniOptions options, Section section)
-    {
-        // If Section is empty, don't serialize its header
-        if (!options.KeepEmptySections && section.Properties.Count == 0) return;
-
-        // Write Section header
-        sw.WriteLine($"[{section.Name}]");
-
-        // Write Section properties
-        foreach (var prop in section.Properties)
+        try
         {
-            // Filter comments
-            if (!options.KeepComments && (prop.Value.StartsWith(';') || prop.Value.EndsWith('#'))) continue;
-
-            // Write property + escape newlines
-            sw.WriteLine(prop.ToString().Replace("\n", "\\n"));
+            File.WriteAllBytes(path, buffer);
         }
-    }
+        catch
+        {
+            SetError(IniError.FailedWrite, path);
+            return -1;
+        }
 
-    #endregion
+        return buffer.LongLength;
+    }
 
     public void Serialize(UnrealArchive Ar)
     {
         Ar.Serialize(ref Path);
         Ar.Serialize(ref Sections);
     }
-
-    public override string ToString() => Path;
 }
 
 public sealed class IniOptions
@@ -231,18 +210,18 @@ public sealed class IniOptions
     /// <summary>
     /// Whether to serialize Ini comments. If not set, all comments ';' '#' will be omitted during serialization.
     /// </summary>
-    public bool KeepComments { get; set; } = false;
+    public bool KeepComments { get; set; }
     /// <summary>
     /// Whether to keep empty sections when serializing ini files. If set to false, section headers without any properties will be removed.
     /// </summary>
-    public bool KeepEmptySections { get; set; } = false;
+    public bool KeepEmptySections { get; set; }
 
-    public IniOptions() {}
+    public IniOptions() { }
 
     public IniOptions(CoalescedOptions options)
     {
         KeepGlobals = options.KeepGlobals;
         KeepComments = options.KeepComments;
-        KeepEmptySections = options.KeepComments;
+        KeepEmptySections = options.KeepEmptySections;
     }
 }

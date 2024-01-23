@@ -3,75 +3,58 @@ using UnrealLib.Interfaces;
 
 namespace UnrealLib.Config;
 
-public class KeyBind
-{
-    string Name;
-    string Command;
-    // bool Control, Shift, Alt, bIgnoreControl, bIgnoreShift, bIgnoreAlt;
-
-    public KeyBind(string line)
-    {
-        if (!line.StartsWith('(') || !line.EndsWith(')')) return;
-
-        string[] sub = line[1..^1].Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
-        foreach (var element in sub)
-        {
-            var prop = new Property(element);
-
-            if (prop.Key.Equals(nameof(Name), StringComparison.OrdinalIgnoreCase))
-                Name = prop.Value;
-            else if (prop.Key.Equals(nameof(Command), StringComparison.OrdinalIgnoreCase))
-                Command = prop.Value;
-        }
-    }
-}
-
-// Change to struct?
 public class Property : ISerializable
 {
-    public string Key = string.Empty;
-    public string Value = string.Empty;
+    public string? Key, Value;
 
-    /// <summary>
-    /// Parameterless constructor. Used internally by UnrealArchive serializer.
-    /// </summary>
+    public bool IsComment => Value is null;     // Comments do not set the Value field
+
+    #region Constructors
+
     public Property() { }
 
     /// <summary>
-    /// Creates a new <see cref="Property"/> instance from existing key and value strings.
+    /// Populate a <see cref="Property"/> via a line from within an ini file.
     /// </summary>
-    public Property(string key, string value)
+    public Property(string iniLine)
     {
-        Key = key;
-        Value = value;
-    }
+        if (string.IsNullOrWhiteSpace(iniLine)) return;
 
-    /// <summary>
-    /// Creates a new <see cref="Property"/> instance from an Ini file line.
-    /// </summary>
-    public Property(string line)
-    {
-        // If this line is commented, starve the Value field
-        if (IsCommented(line))
+        // Ignore leading whitespace here so we can accurately detect comments
+        string trimmedLine = iniLine.TrimStart();
+
+        // If this line is a comment, set its key but not its value
+        if (trimmedLine[0] == ';' || trimmedLine[0] == '#')
         {
-            Key = line;
+            Key = trimmedLine;
             return;
         }
 
-        // Try and split Line into two strings from the first '=' character
-        string[] sub = line.Split('=', 2, StringSplitOptions.TrimEntries);
+        // Split key/value from the first '=' character
+        string[] sub = trimmedLine.Split('=', 2, StringSplitOptions.TrimEntries);
 
         Key = sub[0];
-        Value = sub.Length == 2 ? sub[1].Replace("\\n", "\n") : string.Empty;
+
+        // Not guaranteed a value was passed, so account for that here.
+        Value = sub.Length == 2 ? sub[1] : "";
     }
 
-    public void Serialize(UnrealArchive stream)
+    #endregion
+
+    #region Accessors
+
+    // @TODO invalid properties will trigger null exception probably
+    public override string ToString() => IsComment ? Key : $"{Key}={Value}";
+
+    #endregion
+
+    public bool EqualsCaseInsensitive(Property other) =>
+        Key.Equals(other.Key, StringComparison.OrdinalIgnoreCase) &&
+        Value.Equals(other.Value, StringComparison.OrdinalIgnoreCase);
+
+    public void Serialize(UnrealArchive Ar)
     {
-        stream.Serialize(ref Key);
-        stream.Serialize(ref Value);
+        Ar.Serialize(ref Key);
+        Ar.Serialize(ref Value);
     }
-
-    private static bool IsCommented(string line) => string.IsNullOrEmpty(line) || line[0] == ';' || line[0] == '#';
-
-    public override string ToString() => IsCommented(Key) ? Key : $"{Key}={Value}";
 }
