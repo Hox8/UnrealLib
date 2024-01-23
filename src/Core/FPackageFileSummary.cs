@@ -1,4 +1,5 @@
-﻿using UnrealLib.Enums;
+﻿using UnrealLib.Core.Compression;
+using UnrealLib.Enums;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
@@ -6,7 +7,7 @@ namespace UnrealLib.Core;
 public class FPackageFileSummary : ISerializable
 {
     internal uint Tag;                                      // Generic unreal magic identifier
-    internal short EngineVersion;                           // Engine version this package was saved with
+    internal short PackageVersion;                          // Package version this archive was saved with
     internal short LicenseeVersion;                         // Licensee version this package was saved with
     internal int TotalHeaderSize;                           // Total size, in bytes, of this package summary
     internal string FolderName;                             // UnrealEd browser folder name this package is contained in
@@ -27,20 +28,23 @@ public class FPackageFileSummary : ISerializable
 
     internal FGuid Guid;                                    // Unique identifier for the package
     internal FGenerationInfo[] Generations;                 // Stats regarding older versions of this package
-    internal int EngineBuild;                               // Engine version this package was saved with
+    internal int EngineVersion;                             // Engine version this package was saved with
     internal int CookerVersion;                             // Cooker version this package was saved with
 
     internal CompressionFlags CompressionFlags;             // Flags determining compression on the package
     internal FCompressedChunk[] CompressedChunks;           // Contains compressed chunks should the package be compressed
+
     internal int PackageSource;                             // Value determining whether this package is "official" or user-created
 
     internal string[] AdditionalPackagesToCook;             // References to other packages, most commonly Kismet streamed levels
     internal FTextureAllocations TextureAllocations;       // Table containing exports with inlined textures
 
+    public long OffsetEnd { get; set; }
+
     public void Serialize(UnrealArchive Ar)
     {
         Ar.Serialize(ref Tag);
-        Ar.Serialize(ref EngineVersion);
+        Ar.Serialize(ref PackageVersion);
         Ar.Serialize(ref LicenseeVersion);
         Ar.Serialize(ref TotalHeaderSize);
         Ar.Serialize(ref FolderName);
@@ -61,15 +65,18 @@ public class FPackageFileSummary : ISerializable
 
         Ar.Serialize(ref Guid);
         Ar.Serialize(ref Generations);
-        Ar.Serialize(ref EngineBuild);
+        Ar.Serialize(ref EngineVersion);
         Ar.Serialize(ref CookerVersion);
 
         Ar.Serialize(ref CompressionFlags);
         Ar.Serialize(ref CompressedChunks);
+
         Ar.Serialize(ref PackageSource);
 
         Ar.Serialize(ref AdditionalPackagesToCook);
         Ar.Serialize(ref TextureAllocations);
+
+        OffsetEnd = Ar.Position;
     }
 
     public bool IsStoredCompressed => (PackageFlags & PackageFlags.StoreCompressed) != 0;
