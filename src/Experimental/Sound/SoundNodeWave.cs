@@ -1,4 +1,5 @@
-﻿using UnrealLib.Core;
+﻿using System;
+using UnrealLib.Core;
 using UnrealLib.Enums;
 using UnrealLib.Experimental.UnObj.DefaultProperties;
 
@@ -8,16 +9,26 @@ namespace UnrealLib.Experimental.Sound;
 // Setting NumChannels in the header from 2 to 1 allows it to play, albeit in mono
 
 /// <summary>A line of subtitle text and the time at which it should be displayed.</summary>
-public struct SubtitleCue
+public class SubtitleCue : PropertyHolder
 {
     /// <summary>The text to appear in the subtitle.</summary>
     public string Text;
     /// <summary>The time at which the subtitle is to be displayed, in seconds relative to the beginning of the line.</summary>
     public float Time;
+
+    internal override void ParseProperty(UnrealArchive Ar, FPropertyTag tag)
+    {
+        switch (tag.Name.GetString)
+        {
+            case nameof(Text): Ar.Serialize(ref Text); break;
+            case nameof(Time): Ar.Serialize(ref Time); break;
+            default: base.ParseProperty(Ar, tag); break;
+        }
+    }
 }
 
 /// <summary>A subtitle localized to a specific language.</summary>
-public struct LocalizedSubtitle
+public class LocalizedSubtitle : PropertyHolder
 {
     /// <summary>The 3-letter language for this subtitle.</summary>
     public string LanguageExt;
@@ -36,6 +47,21 @@ public struct LocalizedSubtitle
 
     /// <summary>TRUE if the subtitles should be displayed one line at a time.</summary>
     public bool bSingleLine;
+
+    public override string ToString() => $"{LanguageExt}: {(Subtitles is not null && Subtitles.Length > 0 ? $"\"{Subtitles[0].Text}\"" : "\"\"")}";
+
+    internal override void ParseProperty(UnrealArchive Ar, FPropertyTag tag)
+    {
+        switch (tag.Name.GetString)
+        {
+            case nameof(LanguageExt): Ar.Serialize(ref LanguageExt); break;
+            case nameof(Subtitles): SerializeArray(ref Subtitles, Ar, tag); break;
+            case nameof(bMature): bMature = tag.Value.Bool; break;
+            case nameof(bManualWordWrap): bManualWordWrap = tag.Value.Bool; break;
+            case nameof(bSingleLine): bSingleLine = tag.Value.Bool; break;
+            default: base.ParseProperty(Ar, tag); break;
+        }
+    }
 }
 
 public class SoundNodeWave(FObjectExport export) : SoundNode(export)
@@ -93,10 +119,15 @@ public class SoundNodeWave(FObjectExport export) : SoundNode(export)
     public FUntypedBulkData CompressedFlashData;
 
     /// <summary>
+    /// Size of RawPCMData, or what RawPCMData would be if the sound was fully decompressed.
+    /// </summary>
+    public int RawPCMDataSize;
+
+    /// <summary>
     ///  Subtitle cues. If empty, use SpokenText as the subtitle.
     ///  Will often be empty, as the contents of the subtitle is commonly identical to what is spoken.
     /// </summary>
-    public SubtitleCue[] Subtitles;
+    public SubtitleCue[] Subtitles = [new()];
     /// <summary>TRUE if this sound is considered to contain mature content.</summary>
     public bool bMature;
     /// <summary>Provides contextual information for the sound to the translator.</summary>
@@ -108,6 +139,8 @@ public class SoundNodeWave(FObjectExport export) : SoundNode(export)
     /// <summary>The array of the subtitles for each language. Generated at cook time.</summary>
     public LocalizedSubtitle[] LocalizedSubtitles;
 
+    public bool bMobileHighDetail;
+
     /// <summary>If on mobile and the platform's DetailMode is less than this value, the sound will be discarded to conserve memory.</summary>
     public EDetailMode MobileDetailMode;
 
@@ -116,6 +149,51 @@ public class SoundNodeWave(FObjectExport export) : SoundNode(export)
     /// <summary>Date/Time-stamp of the file from the last import.</summary>
     private string SourceFileTimestamp;
     #endregion
+
+    internal override void ParseProperty(UnrealArchive Ar, FPropertyTag tag)
+    {
+        switch (tag.Name.GetString)
+        {
+            // BOOL
+            case nameof(bForceRealTimeDecompression): bForceRealTimeDecompression= tag.Value.Bool; break;
+            case nameof(bLoopingSound): bLoopingSound = tag.Value.Bool; break;
+            case nameof(bDynamicResource): bDynamicResource= tag.Value.Bool; break;
+            case nameof(bProcedural): bProcedural= tag.Value.Bool; break;
+            case nameof(bManualWordWrap): bManualWordWrap= tag.Value.Bool; break;
+            case nameof(bSingleLine): bSingleLine= tag.Value.Bool; break;
+            case nameof(bMature): bMature= tag.Value.Bool; break;
+
+            case nameof(CompressionQuality): Ar.Serialize(ref CompressionQuality); break;
+            case nameof(Volume): Ar.Serialize(ref Volume); break;
+            case nameof(Pitch): Ar.Serialize(ref Pitch); break;
+            case nameof(Duration): Ar.Serialize(ref Duration); break;
+            case nameof(NumChannels): Ar.Serialize(ref NumChannels); break;
+            case nameof(SampleRate): Ar.Serialize(ref SampleRate); break;
+            case nameof(ChannelOffsets): Ar.Serialize(ref ChannelOffsets); break;
+            case nameof(ChannelSizes): Ar.Serialize(ref ChannelSizes); break;
+
+            case nameof(Subtitles): SerializeArray(ref Subtitles, Ar, tag); break;
+
+            case nameof(Comment): Ar.Serialize(ref Comment); break;
+
+            case nameof(LocalizedSubtitles): SerializeArray(ref LocalizedSubtitles, Ar, tag); break;
+
+            case nameof(bMobileHighDetail): bMobileHighDetail = tag.Value.Bool; break;
+
+            case nameof(MobileDetailMode): Ar.Serialize(ref tag.Value.Name); MobileDetailMode = GetDetailMode(tag.Value.Name); break;
+            case nameof(SourceFilePath): Ar.Serialize(ref SourceFilePath); break;
+            case nameof(SourceFileTimestamp): Ar.Serialize(ref SourceFileTimestamp); break;
+            case nameof(RawPCMDataSize): Ar.Serialize(ref RawPCMDataSize); break;
+            default: base.ParseProperty(Ar, tag); break;
+        }
+    }
+
+    private static EDetailMode GetDetailMode(FName name) => name.GetString switch
+    {
+        nameof(EDetailMode.DM_Low) => EDetailMode.DM_Low,
+        nameof(EDetailMode.DM_Medium) => EDetailMode.DM_Medium,
+        nameof(EDetailMode.DM_High) => EDetailMode.DM_High,
+    };
 
     public override void Serialize(UnrealArchive Ar)
     {
@@ -137,7 +215,7 @@ public class SoundNodeWave(FObjectExport export) : SoundNode(export)
         // IB1: No
         // IB2: Yes
         // IB3: Yes
-        if (Ar.Version >= 851 || Ar.Game is Game.IB2)
+        if (Ar.Version > 788)// Ar.Version >= 851 || Ar.Game is Game.IB2)
         {
             Ar.Serialize(ref CompressedIPhoneData);
         }
