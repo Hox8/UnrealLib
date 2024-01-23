@@ -1,8 +1,8 @@
 ﻿namespace UnrealLib.Core;
 
-public readonly struct FGuid
+public record struct FGuid
 {
-    public readonly int A, B, C, D;
+    public int A, B, C, D;
 
-    public override string ToString() => $"{A:X8}-{B:X8}-{C:X8}-{D:X8}";
+    public override readonly string ToString() => $"{A:X8}-{B:X8}-{C:X8}-{D:X8}";
 }
