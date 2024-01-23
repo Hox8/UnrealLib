@@ -24,7 +24,7 @@ public struct FTextureAllocations : ISerializable
             Ar.Serialize(ref ExportIndicies);
         }
 
-        public override readonly string ToString() => $"{SizeX}x{SizeY} ({ExportIndicies.Length})";
+        public readonly override string ToString() => $"{SizeX}x{SizeY} ({ExportIndicies.Length})";
     }
 
     internal FTextureType[] TextureTypes;
