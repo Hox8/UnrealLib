@@ -5,203 +5,225 @@ using UnrealLib.Enums;
 
 namespace UnrealLib.Config.Coalesced;
 
-// Coalesced class works exclusively with MemoryStream buffers due to encryption
-
 public class Coalesced : UnrealArchive
 {
-    private Game _decryptedWith = Game.Unknown;
-    public List<Ini> Inis = new();
-
+    private Game Game;
+    private List<Ini> Inis;
     public CoalescedOptions Options = new();
-    private const string HelperName = "ibhelper";
 
-    // MemoryStream must be resizable (ECB padding, addition of Inis/Sections/Properties)
-    public Coalesced(string path, Game game = Game.Unknown) : base(path, makeCopy: true)
+    private const string HelperFileName = "ibhelper";
+
+    #region Constructors
+
+    private Coalesced(string filePath, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false) : base(filePath, mode, access, makeCopy: makeCopy) { }
+
+    public static Coalesced FromFile(string filePath, Game game = Game.Unknown, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false)
     {
-        if (PathIsDirectory)
-        {
-            _buffer = new MemoryStream();
+        var coal = new Coalesced(filePath, mode, access, makeCopy);
 
-            // Base constructor will set this, but we don't care about it here
-            if (Error is ArchiveError.FailedRead) Error = ArchiveError.None;
-        }
-    }
-
-    /// <summary>
-    /// Loads a Coalesced file from disk.
-    /// </summary>
-    public override void Load()
-    {
-        if (HasError) return;
-
-        if (PathIsDirectory)
-        {
-            Error = ArchiveError.RequiresFile;
-            return;
-        }
-
-        if (!TryDecrypt())
-        {
-            Error = ArchiveError.FailedDecrypt;
-            return;
-        }
+        // If the base ctor enocuntered any issues, return early
+        if (coal.HasError) return coal;
 
         try
         {
-            Position = 0;
-            Serialize(ref Inis);
+            if (!coal.TryDecrypt())
+            {
+                // Failed to decrypt the file
+                coal.SetError(ArchiveError.FailedDecrypt);
+            }
+            else if (game != Game.Unknown && coal.Game != game)
+            {
+                // The Coalesced belongs to a game we weren't expecting
+                coal.SetError(ArchiveError.UnexpectedGame);
+            }
+            else
+            {
+                coal.Position = 0;
+                coal.Serialize(ref coal.Inis);
+            }
         }
         catch
         {
-            Error = ArchiveError.FailedParse;
-            return;
+            // Other errors just chalk up to FailedParse (invalid Coalesced file)
+            coal.SetError(ArchiveError.FailedParse, null);
         }
 
-        // Error if the Coalesced file belongs to a game we weren't expecting
-        if (Game is not Game.Unknown && Game != _decryptedWith)
-        {
-            Error = ArchiveError.UnexpectedGame;
-            return;
-        }
+        // We've read all we need from the stream, so dispose of it here
+        coal._buffer.Dispose();
 
-        Game = _decryptedWith;
+        return coal;
     }
 
-    /// <summary>
-    /// Loads a Coalesced folder from disk.
-    /// </summary>
-    public void LoadFolder()
+    public static Coalesced FromFolder(string filePath, Game game = Game.Unknown, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false)
     {
-        if (HasError) return;
+        var coal = new Coalesced(filePath, mode, access, makeCopy);
 
-        if (!PathIsDirectory)
+        // If the base ctor enocuntered any issues, return early
+        if (coal.HasError) return coal;
+
+        if (!coal.IsDirectory)
         {
-            Error = ArchiveError.RequiresFolder;
-            return;
+            coal.SetError(ArchiveError.RequiresFolder);
+            return coal;
         }
 
         // Locate the helper file so we know how to encrypt the files
-        if (!ParseHelperFile(Path.Combine(QualifiedPath, HelperName)))
+        if (!coal.ParseHelperFile(Path.Combine(coal.FullName, HelperFileName)))
         {
-            Error = ArchiveError.InvalidCoalescedFolder;
-            return;
+            coal.SetError(ArchiveError.InvalidCoalescedFolder, null);
+            return coal;
         }
 
-        foreach (var entry in Directory.GetFiles(QualifiedPath, "*.*", SearchOption.AllDirectories))
+        coal.Inis = [];
+        var languages = Globals.GetLanguages(coal.Game);
+        foreach (var file in Directory.EnumerateFiles(filePath, "*.*", SearchOption.AllDirectories))
         {
-            if (!Path.HasExtension(entry)) continue;
-            string extension = Path.GetExtension(entry)[1..].ToUpperInvariant();
+            // Filter out files lacking a 3-character file extension
+            if (file.Length < 4 || file[^4] != '.') continue;
 
-            // Filter out unsupported extensions
-            if (!extension.Equals("INI") && Globals.GetLanguages(Game).IndexOf(extension) == -1) continue;
+            // Filter out files lacking the right extensions
+            string extension = file[^3..].ToUpperInvariant();
+            if (extension != "INI" && languages.IndexOf(extension) == -1) continue;
 
-            var ini = new Ini(entry, true);
-            ini.Path = "..\\..\\" + ini.Path[(FileInfo.FullName.Length + 1)..].Replace('/', '\\');
-            Inis.Add(ini);
+            // Read file as an ini and add it to the list.
+            // Add relative path bit at the front, since UE3 expects it to be there
+            var ini = Ini.FromFile(file);
+            ini.Path = "..\\..\\" + ini.Path[(coal.FullName.Length + 1)..].Replace('/', '\\');
+            coal.Inis.Add(ini);
         }
+
+        return coal;
     }
 
-    /// <summary>
-    /// Saves to a Coalesced file on disk.
-    /// </summary>
-    /// <returns>Number of bytes written.</returns>
-    public override long Save(string? newPath = null)
+    #endregion
+
+    public override long SaveToFile(string? path = null)
     {
-        if (HasError || (newPath is not null && !SetFileInfo(newPath))) return -1;
+        if (HasError) return -1;
+
+        path ??= FullName;
 
         ForceUTF16 = Options.ForceUnicode;
+        bool saveEncrypted = Options.DoSaveEncryption && Game is not Game.IB1;
+        long bytesWritten;
 
-        // Save Coalesced file
-        if (!PathIsDirectory)
+        using (_buffer = File.Create(path, 131072, FileOptions.SequentialScan))
         {
-            Position = 0;
-
             StartSaving();
             Serialize(ref Inis);
 
-            // Since we're reusing the original buffer, we need to set the final length in case we're smaller.
-            SetLength(Position);
-
-            if (Options.DoSaveEncryption && Game is not Game.IB1)
+            if (saveEncrypted)
             {
-                AES.CryptoECB(this, Game, false);
+                // AES requires length to be a multiple of 16. Pad it here if we fall short
+                int remainder = (int)Length % 16;
+                if (remainder != 0)
+                {
+                    Length += 16 - remainder;
+                }
             }
 
-            return base.Save();
+            bytesWritten = Length;
         }
 
-        Error = ArchiveError.FailedSave;
-        return -1;
+        if (saveEncrypted)
+        {
+            string tempPath = $"{path}.temp";
+
+            using (var unencryptedStream = File.OpenRead(path))
+            {
+                using (var encryptedStream = File.Create(tempPath, 131072, FileOptions.SequentialScan))
+                {
+                    AES.EncryptStream(unencryptedStream, encryptedStream, Game, true);
+                    bytesWritten = encryptedStream.Length;
+                }
+            }
+
+            File.Move(tempPath, path, true);
+        }
+
+        return bytesWritten;
     }
 
-    public long SaveFolder(string folderPath)
+    public long SaveToFolder(string path)
     {
-        if (HasError || !SetFileInfo(folderPath)) return -1;
+        if (HasError) return -1;
+
+        long bytesWritten = 0;
 
         try
         {
-            if (Directory.Exists(QualifiedPath)) Directory.Delete(QualifiedPath, true);
-            Directory.CreateDirectory(QualifiedPath);
+            if (Directory.Exists(path)) Directory.Delete(path, true);
+            Directory.CreateDirectory(path);
         }
         catch
         {
-            Error = ArchiveError.FailedDelete;
+            SetError(ArchiveError.FailedDelete, path);
             return -1;
         }
 
         var iniOptions = new IniOptions(Options);
         foreach (var ini in Inis)
         {
-            // Strip relative segment and replace separator chars in favor of Unix systems
-            string outputPath = Path.Combine(QualifiedPath, ini.Path[6..].Replace('\\', '/'));
-            string outputDir = Path.GetDirectoryName(outputPath);
+            // Copy Coalesced options to Ini
+            ini.Options = iniOptions;
 
-            Directory.CreateDirectory(outputDir);
-            ini.Save(outputPath, iniOptions);
+            // Strip relative segment (6 chars) and replace separator chars in favor of Unix systems.
+            // Windows is OK with mixing separator chars!
+            string outPath = Path.Combine(path, ini.Path[6..].Replace('\\', '/'));
+            Directory.CreateDirectory(Path.GetDirectoryName(outPath));
+
+            bytesWritten += ini.SaveToFile(outPath);
+
+            if (ini.ErrorType is IniError.FailedWrite)
+            {
+                SetError(ArchiveError.FailedWrite, outPath);
+                return -1;
+            }
         }
 
         // Write Game to disk so we know how to re-encrypt the folder later
-        string helperPath = Path.Combine(Path.ChangeExtension(QualifiedPath, null), HelperName);
+        string helperPath = Path.Combine(path, HelperFileName);
 
-        File.WriteAllBytes(helperPath, [(byte)_decryptedWith]);
+        File.WriteAllBytes(helperPath, [(byte)Game]);
         File.SetAttributes(helperPath, FileAttributes.Hidden);
 
-        return 0;
+        return bytesWritten;
     }
 
-    private bool TryDecrypt()
+    #region Helpers
+
+    public bool TryDecrypt()
     {
-        // Allocate enough memory so we can copy the first compressed block into memory.
-        // We'll test compression keys against it rather than the entire stream.
-        Span<byte> block = stackalloc byte[16];
+        byte[] firstBlock = new byte[16];
 
-        Position = 0;
-        ReadExactly(block);
+        ReadExactly(firstBlock);
 
-        // If we're already unencrypted, then we must have an IB1 coalesced file
-        if (AES.BlockIsUnencrypted(block))
+        if (AES.BlockIsUnencrypted(firstBlock))
         {
-            _decryptedWith = Game.IB1;
+            Game = Game.IB1;
             return true;
         }
 
         // Start from IB2 and iterate each game up to / including VOTE.
-        for (_decryptedWith = Game.IB2; _decryptedWith <= Game.Vote; _decryptedWith = (Game)((byte)_decryptedWith << 1))
+        for (Game = Game.IB2; Game <= Game.Vote; Game = (Game)((byte)Game << 1))
         {
-            // If the compressed block successfully decrypted, decrypt the whole stream.
-            if (AES.TryDecryptBlock(block, _decryptedWith))
-            {
-                AES.CryptoECB(this, _decryptedWith, true);
-                return true;
-            }
+            if (!AES.TryDecryptBlock(firstBlock, Game)) continue;
+
+            var options = new FileStreamOptions() { Access = FileAccess.ReadWrite, Mode = FileMode.Create, Options = FileOptions.DeleteOnClose };
+            var decryptedStream = File.Open($"{DirectoryName}/{Path.GetRandomFileName()}", options);
+
+            _buffer.Position = 0;
+            AES.EncryptStream(_buffer, decryptedStream, Game, false);
+
+            _buffer.Dispose();
+            _buffer = decryptedStream;
+
+            return true;
         }
 
-        // None of the AES keys could decrypt the initial block - decryption failed.
-        _decryptedWith = Game.Unknown;
         return false;
     }
 
-    #region Helpers
     private bool ParseHelperFile(string path)
     {
         if (File.Exists(path))
