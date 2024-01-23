@@ -1,6 +1,11 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using UnrealLib.Core;
+using UnrealLib.Core.Compression;
+using UnrealLib.Enums;
+using UnrealLib.Experimental.Fonts;
+using UnrealLib.Experimental.Materials;
 using UnrealLib.Experimental.Sound;
 using UnrealLib.Experimental.Textures;
 using UnrealLib.Experimental.UnObj;
@@ -22,22 +27,19 @@ public class UnrealPackage : UnrealArchive
 
     #region Accessors
 
-    /// <summary>Returns the engine version this package was saved with, e.g. 864.</summary>
+    /// <summary>Returns the package version this archive was saved with, e.g. 864.</summary>
+    public int GetPackageVersion() => Summary.PackageVersion;
+    /// <summary>Returns the UE3 version this package was saved with, e.g. 9714.</summary>
     public int GetEngineVersion() => Summary.EngineVersion;
-    /// <summary>Returns the engine build number this package was saved with, e.g. 9714.</summary>
-    public int GetEngineBuild() => Summary.EngineBuild;
 
     public CompressionFlags GetCompressionFlags() => Summary.CompressionFlags;
     public void SetCompressionFlags(CompressionFlags value) => Summary.CompressionFlags = value;
 
     #endregion
 
-    public UnrealPackage(string filePath, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite) : base(filePath, mode, access)
-    {
-        Load();
-    }
+    #region Constructors
 
-    public override void Load()
+    private UnrealPackage(string filePath, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false) : base(filePath, mode, access, makeCopy: makeCopy)
     {
         if (HasError) return;
 
@@ -68,7 +70,7 @@ public class UnrealPackage : UnrealArchive
         {
             SetError(ArchiveError.FailedParse, null);
         }
-        }
+    }
 
     public static UnrealPackage FromFile(string filePath, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false) => new(filePath, mode, access, makeCopy);
 
@@ -85,7 +87,7 @@ public class UnrealPackage : UnrealArchive
         if (WasOriginallyCompressed)
         {
             Serialize(ref Summary);
-    }
+        }
 
         // Compression testing
 #if !TRUE
@@ -257,22 +259,32 @@ public class UnrealPackage : UnrealArchive
         return null;
     }
 
-    public static UObject GetUObject(FObjectExport export)
+    public static UObject GetUObject(FObjectExport export, bool shouldSerialize = true)
     {
-        UObject uobject = export.Class?.GetName() switch
+        if (export.Object is null)
         {
-            "Field"             => new UField(export),
-            "Function"          => new UFunction(export),
-            "State"             => new UState(export),
-            "Struct"            => new UStruct(export),
-            "Texture2D"         => new UTexture2D(export),
-            "LightMapTexture2D" => new ULightMapTexture2D(export),
-            "SoundNodeWave"     => new SoundNodeWave(export),
-            null                => new UClass(export),     // UClass if class ref is null
-            _ => throw new NotImplementedException($"'{export.Class}' is not implemented")
-        };
+            export.Object = export.Class?.GetName() switch
+            {
+                "Field" => new UField(export),
+                "Function" => new UFunction(export),
+                "State" => new UState(export),
+                "Struct" => new UStruct(export),
+                "Texture2D" => new UTexture2D(export),
+                "LightMapTexture2D" => new ULightMapTexture2D(export),
+                "SoundNodeWave" => new SoundNodeWave(export),
+                "Material" => new UMaterial(export),
+                "Font" => new UFont(export),
+                null => new UClass(export),     // UClass if class ref is null
+                _ => throw new NotImplementedException($"'{export.Class}' is not implemented")
+            };
 
-        uobject.Serialize(export.Package);
-        return uobject;
+            if (shouldSerialize)
+            {
+                export.Package.Position = export.SerialOffset;
+                export.Object.Serialize(export.Package);
+            }
+        }
+
+        return export.Object;
     }
 }

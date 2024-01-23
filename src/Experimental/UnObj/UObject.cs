@@ -1,21 +1,23 @@
+using System;
 using UnrealLib.Core;
 using UnrealLib.Experimental.Component;
 using UnrealLib.Experimental.UnObj.DefaultProperties;
+using UnrealLib.Interfaces;
 
 namespace UnrealLib.Experimental.UnObj;
 
-public class UObject : PropertyHolder
+public class UObject(FObjectExport? export = null) : PropertyHolder, ISerializable
 {
     #region Serialized members
 
     protected int NetIndex;
 
-#endregion
+    #endregion
 
     #region Transient members
 
-    internal FObjectExport Export { get; init; }
-    public UnrealPackage Package => Export.Package;
+    public FObjectExport? Export { get; init; } = export;
+    public bool Loaded { get; internal set; } = false;
 
     #endregion
 
@@ -36,25 +38,32 @@ public class UObject : PropertyHolder
 
     #endregion
 
-    public UObject(FObjectExport export)
-    {
-        Export = export;
-    }
-
     // Position must be set before calling this method!
     public virtual void Serialize(UnrealArchive Ar)
     {
-        //if (Ar.IsLoading)
-        //{
-        //    Ar.Position = Export.SerialOffset;
-        //}
-
         Ar.Serialize(ref NetIndex);
 
         // UClasses (null) and Components do not serialize script properties
         if (!Ar.SerializeBinaryProperties || Export.Class is not null && this is not UComponent)
         {
             SerializeProperties(Ar);
+        }
+    }
+}
+
+public struct UObjectIndex<T> where T : UObject, ISerializable
+{
+    public T Object;
+
+    public void Serialize(UnrealPackage Ar)
+    {
+        if (!Ar.IsLoading) throw new Exception();
+
+        int index = default;
+        Ar.Serialize(ref index);
+        if (Ar.GetObject(index) is FObjectExport export)
+        {
+            UnrealPackage.GetUObject(export);
         }
     }
 }

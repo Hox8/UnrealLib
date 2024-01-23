@@ -2,10 +2,9 @@
 
 	<PropertyGroup>
 		<TargetFramework>net8.0</TargetFramework>
-		<ImplicitUsings>disable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<IsAotCompatible>true</IsAotCompatible>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<IsAotCompatible>true</IsAotCompatible>
 		
 		<!-- Toggles constructing object dependency graphs (EARLY, unoptimized) -->
 		<!-- Has a noticeable impact on memory usage, and have very low usage realistically (use Lazy<T>). -->
@@ -13,25 +12,23 @@
 		<!--<DefineConstants>TRACK_OBJECT_USAGE</DefineConstants>-->
 		
 		<!-- If enabled, unknown properties are kept in a List<FPropertyTag>. Known properties will still be assigned to objects directly and won't be placed in the list. -->
+		<!-- Force this on? -->
 		<DefineConstants>KEEP_UNKNOWN_DEFAULT_PROPERTIES</DefineConstants>
+		
+		<!-- Whether to use ArrayPool renting over standard allocations. There should be little reason to turn this off. -->
+		<DefineConstants>WITH_POOLING</DefineConstants>
 	</PropertyGroup>
 
-	<PropertyGroup Condition=" '$(OS)' != 'Windows_NT' ">
+	<PropertyGroup Condition="'$(OS)'!='Windows_NT'">
 		<DefineConstants>UNIX</DefineConstants>
 	</PropertyGroup>
 
-	<PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
 		<DebugType>none</DebugType>
 	</PropertyGroup>
 
-	<PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-		<DebugType>full</DebugType>
-	</PropertyGroup>
-
-	<ItemGroup>
-	  <Reference Include="Zip Reduced">
-	    <HintPath>..\..\..\IBPatcherNovemberRewrite\IBPatcherNovemberRewrite\Zip Reduced.dll</HintPath>
-	  </Reference>
-	</ItemGroup>
+	<!--<ItemGroup>
+		<ProjectReference Include="..\PropertyGenerator\PropertyGenerator.csproj" OutputItemType="Analyzer"/>
+	</ItemGroup>-->
 
 </Project>

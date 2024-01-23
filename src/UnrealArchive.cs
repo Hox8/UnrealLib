@@ -10,69 +10,117 @@ using UnrealLib.Interfaces;
 
 namespace UnrealLib;
 
-// @TODO: Have original filepath stats and current filepath stats.
-// Would make using InitFIleInfo() outside of constructor make a lot more sense
-
 // @TODO: Investigate the dispose methods of the original UnrealArchive class and port them here
 // @TODO: Clean up and organize things
 
 // @TODO All enums project-wide should use that EnumExtensions attribute from Nuget or similar!
-public class UnrealArchive : Stream, IDisposable
+
+public enum ArchiveError : byte
 {
-    protected Stream _buffer;
+    None,
+
+    FailedRead,
+    FailedWrite,
+    FailedParse,
+    FailedDecrypt,
+    // FailedDecompress,
+    FailedDelete,
+    FailedSave,
+
+    RequiresFile,
+    RequiresFolder,
+
+    PathIllegal,
+    PathNonexistent,
+
+    UnsupportedDecompress,
+
+    UnexpectedGame,
+    InvalidCoalescedFolder,
+    InvalidCoalescedFile
+}
+
+// Some ground rules:
+// An instance can open (during init/ctor), but it can never re-open to something else. Streams should be immutable and persist for the duration of the class
+// Saves can happen unlimited times. FileStream saving to its own path should not really do anything. Otherwise, File.Create().
+public class UnrealArchive : ErrorHelper<ArchiveError>, IDisposable
+{
+    internal Stream _buffer;
     private bool _disposed;
-
-    public ArchiveError Error { get; protected set; }
-
-    #region Accessors
-
-    public string Filename => FileInfo.Name;
-    public string QualifiedPath => FileInfo.FullName;
-    public string? DirectoryName => FileInfo.DirectoryName;
-    public bool PathIsDirectory => (FileInfo.Attributes & FileAttributes.Directory) != 0;
-    public bool PathExists => (int)FileInfo.Attributes != -1;
-
-    public bool StartSaving() => IsLoading = false;
-    public bool StartLoading() => IsLoading = true;
-
-    public override string ToString() => FileInfo.Name;
-
-    #endregion
+    protected bool _leaveOpen;
 
     #region Constructors
 
+    internal UnrealArchive(Stream stream)
+    {
+        _buffer = stream;
+    }
+
     public UnrealArchive(string path, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false)
     {
-        if (!SetFileInfo(path)) return;
+        FileHelper = new(path);
 
-        if ((makeCopy || (access & FileAccess.Read) != 0) && !PathIsReadable(path))
+        // Check path is valid
+        if (!FileHelper.IsLegallyFormatted)
         {
-            Error = ArchiveError.FailedRead;
+            // Use FullName here, since any part of the path could be broken
+            SetError(ArchiveError.PathIllegal, path);
             return;
         }
 
+        // Check for read access
+        if ((access & FileAccess.Read) != 0 && !FileHelper.IsReadable)
+        {
+            SetError(ArchiveError.FailedRead, FileHelper.Name);
+            return;
+        }
+
+        // Check for write access
+        if ((access & FileAccess.Write) != 0 && !FileHelper.IsWritable)
+        {
+            SetError(ArchiveError.FailedWrite, FileHelper.Name);
+            return;
+        }
+
+        // Copy data into a MemoryStream if requested, otherwise open a FileStream
         if (makeCopy)
         {
-            byte[] data = File.ReadAllBytes(path);
-            _buffer = new MemoryStream(data.Length);
-            _buffer.Write(data);
-            _buffer.Position = 0;
+            _buffer = new MemoryStream();
+            _buffer.Write(File.ReadAllBytes(path));
+            Position = 0;
         }
         else
         {
-            if ((access & FileAccess.Write) != 0 && !PathIsWritable(path))
+            if (mode is FileMode.Open && !FileHelper.Exists)
             {
-                Error = ArchiveError.FailedWrite;
+                SetError(ArchiveError.PathNonexistent, FileHelper.Name);
                 return;
             }
 
-            _buffer = File.Open(path, mode, access);
+            _buffer = FileHelper.Open(mode, access, FileShare.Read);
         }
+
+        LastSavedFullPath = FullName;
     }
+
+    public static UnrealArchive FromFile(string path, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false) => new(path, mode, access, makeCopy);
 
     #endregion
 
     #region Core
+
+    [Flags]
+    private enum State : byte
+    {
+        /// <summary>0 == Saving, 1 == Loading</summary>
+        Loading = 0,
+        /// <summary>0 == not compressing, 1 == compressing</summary>
+        Compressing = 1 << 0
+    }
+
+    // private State _state = State.Loading;
+    public bool IsLoading = true;
+    public bool IsCompressing;
 
     /// <summary>
     /// Influences Unreal package serialization when set.
@@ -97,157 +145,73 @@ public class UnrealArchive : Stream, IDisposable
     public bool ForceUTF16 { get; set; } = false;
 
     /// <summary>
-    /// Influences whether data is serialized from or to a data source.
-    /// </summary>
-    public bool IsLoading { get; private set; } = true;
-
-    /// <summary>
     /// When true, properties use FName serialization. When false, properties are serialized using strings directly.
     /// Useful for scenarios where there is no name table, such as Infinity Blade saves. 
     /// </summary>
     public bool SerializeBinaryProperties { get; set; } = true;
 
+    public bool StartLoading() => IsLoading = true;
+    public bool StartSaving() => IsLoading = false;
+
+    #endregion
+
+    #region Accessors
+
+    public override string ToString() => Name;
+
     #endregion
 
     #region IO & utilities
 
-    protected FileInfo FileInfo;
-    public long InitialLength { get; protected set; }
+    private readonly FileHelper FileHelper;
+    public string Name => FileHelper.Name;
+    public string FullName => FileHelper.FullName;
+    public string DirectoryName => FileHelper.DirectoryName;
+    public long StartingLength => FileHelper.StartingLength;
+    public long FinalLength => FileHelper.Length;
+    public bool IsFile => FileHelper.IsFile;
+    public bool IsDirectory => FileHelper.IsDirectory;
 
-    public static bool PathIsWritable(string path)
-    {
-        try
-        {
-            var fileOptions = new FileStreamOptions { Access = FileAccess.Write, Mode = FileMode.OpenOrCreate };
-
-            if (!Path.Exists(path))
-            {
-                // We don't want to set this for pre-existing files
-                fileOptions.Options |= FileOptions.DeleteOnClose;
-            }
-
-            using (File.Open(path, fileOptions)) ;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public static bool PathIsReadable(string path)
-    {
-        try
-        {
-            using (File.OpenRead(path)) ;
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public static bool PathIsValid(string path)
-    {
-        try
-        {
-            var fi = new FileInfo(path);
-            if ((int)fi.Attributes == -1) ; // Dummy check. An exception is raised here if the path is invalid
-            
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Sets the filepath and other related metadata. Does not affect the underlying stream!
-    /// </summary>
-    /// <param name="filePath"></param>
-    /// <returns></returns>
-    protected bool SetFileInfo(string filePath)
-    {
-        if (_buffer is FileStream) throw new NotImplementedException();
-
-        if (!PathIsValid(filePath))
-        {
-            Error = ArchiveError.PathInvalid;
-            return false;
-        }
-
-        FileInfo = new FileInfo(filePath);
-        InitialLength = PathIsDirectory ? -1 : FileInfo.Length;
-
-        return true;
-    }
+    public string LastSavedFullPath;
 
     #endregion
 
-    #region Error handling
+    #region ErrorHelper
 
-    public enum ArchiveError
+    public override string GetErrorString() => ErrorType switch
     {
-        None,
+        ArchiveError.None => "No error.",
 
-        FailedRead,
-        FailedWrite,
-        FailedParse,
-        FailedDecrypt,
-        FailedDecompress,
-        FailedDelete,
-        FailedSave,
-
-        RequiresFile,
-        RequiresFolder,
-
-        PathInvalid,
-        PathNonexistent,
-
-        UnsupportedDecompress,
-
-        UnexpectedGame,
-        InvalidCoalescedFolder,
-    }
-
-    public bool HasError => Error is not ArchiveError.None;
-    public string ErrorString => Error switch
-    {
-        ArchiveError.None => "No error",
-
-        ArchiveError.PathNonexistent => "Path does not exist",
-
-        ArchiveError.FailedRead => "File does not support reading",
-        ArchiveError.FailedWrite => "File does not support writing",
+        ArchiveError.PathNonexistent => $"'{ErrorContext}' does not exist.",
+        ArchiveError.PathIllegal => $"'{ErrorContext}' is not a valid path.",
+        ArchiveError.FailedRead => $"Failed to read from '{ErrorContext}'.",
+        ArchiveError.FailedWrite => $"Failed to write to '{ErrorContext}'.",
         ArchiveError.FailedParse => "Failed to parse file",
         ArchiveError.FailedDecrypt => "Failed to decrypt file",
-        ArchiveError.FailedDecompress => "Failed to decompress file",
+        // ArchiveError.FailedDecompress => "Failed to decompress file",
+        ArchiveError.UnsupportedDecompress => $"Unsupported compression scheme",
         ArchiveError.FailedDelete => "Failed to remove path",
         ArchiveError.FailedSave => "Failed to perform a save",
 
         ArchiveError.RequiresFile => "Operation requires a file",
         ArchiveError.RequiresFolder => "Operation requires a folder",
-
-        ArchiveError.UnsupportedDecompress => "Compressed archives are not supported"
     };
 
     #endregion
 
-    #region Stream Api
+    #region Stream API
 
-    public override bool CanRead => _buffer.CanRead;
-    public override bool CanSeek => _buffer.CanSeek;
-    public override bool CanWrite => _buffer.CanWrite;
-    public override long Length => _buffer.Length;
-    public override long Position { get => _buffer.Position; set => _buffer.Position = value; }
+    public long Length { get => _buffer.Length; set => _buffer.SetLength(value); }
+    public long Position { get => _buffer.Position; set => _buffer.Position = value; }
 
-    public override void Flush() => _buffer.Flush();
-    public override int Read(byte[] buffer, int offset, int count) => _buffer.Read(buffer, offset, count);
-    public override long Seek(long offset, SeekOrigin origin) => _buffer.Seek(offset, origin);
-    public override void SetLength(long value) => _buffer.SetLength(value);
-    public override void Write(byte[] buffer, int offset, int count) => _buffer.Write(buffer, offset, count);
+    public void Flush() => _buffer.Flush();
+
+    public void Write(byte[] buffer, int offset, int count) => _buffer.Write(buffer, offset, count);
+    public void Write(ReadOnlySpan<byte> buffer) => _buffer.Write(buffer);
+    public void WriteByte(byte value) => _buffer.WriteByte(value);
+
+    public void ReadExactly(byte[] buffer, int offset, int count) => _buffer.ReadExactly(buffer, offset, count);
+    public void ReadExactly(Span<byte> buffer) => _buffer.ReadExactly(buffer);
 
     /// <summary>
     /// Copies the contents of the stream into a new byte array.
@@ -293,6 +257,7 @@ public class UnrealArchive : Stream, IDisposable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Serialize(Span<byte> value)
+    
     {
         if (IsLoading)
         {
@@ -313,22 +278,31 @@ public class UnrealArchive : Stream, IDisposable
         }
     }
 
-    public void Serialize(ref string value)
+    public unsafe void Serialize(ref string value)
     {
         int length = 0;
 
         if (IsLoading)
         {
             Serialize(ref length);
-            int numBytes = length < 0 ? length * -2 : length;
 
-            // Allocate temp buffer on the stack if string is small enough
+            // Cannot create buffer of size 0, so handle here
+            if (length == 0)
+            {
+                value = string.Empty;
+                return;
+            }
+
+            bool isAscii = length > 0;
+            int numBytes = isAscii ? length : length * -2;
+
             Span<byte> buffer = numBytes < 384 ? stackalloc byte[numBytes] : new byte[numBytes];
             ReadExactly(buffer);
 
-            value = length == 0 ? string.Empty : length < 0                     // Empty
-                ? new string(MemoryMarshal.Cast<byte, char>(buffer[..^2]))      // Utf16
-                : Encoding.ASCII.GetString(buffer[..^1]);                       // Ascii
+            // Ideally we wouldn't do any copying, but that might be pushing it...
+            fixed (void* pValue = &buffer[0]) value = isAscii
+                ? new string((sbyte*)pValue)    // Copies and widens ASCII string
+                : new string((char*)pValue);    // Copies UTF-16 string
         }
         else
         {
@@ -338,14 +312,14 @@ public class UnrealArchive : Stream, IDisposable
             }
             else if (!ForceUTF16 && Ascii.IsValid(value))
             {
-                length = value.Length + 1;  // accommodate ascii null terminator
+                length = value.Length + 1;  // +1 for ascii null terminator
                 Serialize(ref length);
                 Write(Encoding.ASCII.GetBytes(value));
                 WriteByte(0);
             }
             else
             {
-                length = ~value.Length;   // accommodate utf16 null terminator
+                length = ~value.Length;   // +2 for utf16 null terminator
                 Serialize(ref length);
                 Write(MemoryMarshal.Cast<char, byte>(value.AsSpan()));
                 WriteByte(0);
@@ -395,7 +369,7 @@ public class UnrealArchive : Stream, IDisposable
 
         Debug.Assert(value.Length > 0);
 
-        // Read the contents of the array in one go.
+        // Serialize the contents of the array in one go.
         fixed (void* pValue = &value[0])
         {
             Serialize(new Span<byte>(pValue, sizeof(T) * value.Length));
@@ -485,35 +459,65 @@ public class UnrealArchive : Stream, IDisposable
 
     #endregion
 
-    public virtual void Load() { }
-    public virtual long Save(string? newPath = null)
+    public virtual long SaveToFile(string? path = null)
     {
-        if (HasError || (newPath is not null && !SetFileInfo(newPath))) return -1;
+        if (HasError) return -1;
+
+        Debug.Assert(!IsCompressing);
+
+        // If a path wasn't specified, we're overwriting our current file
+        path ??= LastSavedFullPath;
 
         try
         {
             if (_buffer is MemoryStream)
             {
-                using (var fs = File.Create(FileInfo.FullName, 0, FileOptions.SequentialScan))
+                using (var fs = File.Create(path, 0, FileOptions.SequentialScan))
                 {
                     fs.Write(GetBufferRaw(), 0, (int)Length);
                 }
             }
             else
             {
-                Flush();
+                // If we're saving the file we already have open, flush any buffered data
+                if (((FileStream)_buffer).Name == path)
+                // if (path == FullName)
+                {
+                    Flush();
+                }
+                else
+                {
+                    // Otherwise create a new file and write to it
+                    using (var fs = File.Create(path))
+                    {
+                        _buffer.Position = 0;
+                        _buffer.CopyTo(fs);
+                    }
+                }
+
+                LastSavedFullPath = Path.GetFullPath(path);
             }
         }
         catch
         {
-            Error = ArchiveError.FailedWrite;
+            SetError(ArchiveError.FailedWrite, null);
             return -1;
         }
 
-        return Length;
+        long length = Length;
+
+        if (!_leaveOpen)
+        {
+            _buffer.Dispose();
+        }
+
+        return length;
     }
 
-    public new void Dispose()
+    /// <summary>
+    /// Disposes of the underlying stream, regardless of whether LeaveOpen has been set.
+    /// </summary>
+    public void Dispose()
     {
         if (_disposed) return;
 
@@ -529,12 +533,67 @@ public class UnrealArchive : Stream, IDisposable
     }
 }
 
-public abstract class ErrorHelper<T> where T : Enum
+public sealed class FileHelper
 {
-    public T Error { get; protected set; }
-    public abstract bool HasError { get; }
+    private readonly FileInfo _fileInfo;
+    public readonly long StartingLength;
+    public readonly bool IsLegallyFormatted;
 
-    public string ErrorString => GetString(Error);
-    public void SetError(T error) => Error = error;
-    public abstract string GetString(T error);
+    // Names
+    public string Name => _fileInfo.Name;
+    public string FullName => _fileInfo.FullName;
+    public string DirectoryName => _fileInfo.DirectoryName;
+
+    // Attributes
+    public bool IsFile => (_fileInfo.Attributes & FileAttributes.Directory) == 0;
+    public bool IsDirectory => (_fileInfo.Attributes & FileAttributes.Directory) != 0;
+    public bool Exists => (int)_fileInfo.Attributes != -1;
+    public long Length => _fileInfo.Length;
+
+    // Permissions
+    public bool IsReadable => HasAccess(FileAccess.Read);
+    public bool IsWritable => HasAccess(FileAccess.Write);
+
+    public FileHelper(string path)
+    {
+        try
+        {
+            _fileInfo = new FileInfo(path);
+
+            if (Exists && IsFile)
+            {
+                StartingLength = _fileInfo.Length;
+            }
+
+            IsLegallyFormatted = true;
+        }
+        catch // Illegally-formatted paths raise IOException
+        {
+            IsLegallyFormatted = false;
+        }
+    }
+
+    public FileStream Open(FileMode mode, FileAccess access, FileShare share) => _fileInfo.Open(mode, access, share);
+
+    private bool HasAccess(FileAccess access)
+    {
+        if (IsDirectory) return true;
+
+        var options = new FileStreamOptions
+        {
+            Access = access,
+            Mode = FileMode.OpenOrCreate,
+            Options = Exists ? FileOptions.None : FileOptions.DeleteOnClose,    // If the entry doesn't exist yet, make sure it's deleted after we create it
+        };
+
+        try
+        {
+            using (File.Open(_fileInfo.FullName, options)) ;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }
