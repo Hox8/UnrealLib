@@ -1,9 +1,9 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 using UnrealLib.Core;
 
 namespace UnrealLib.Experimental.UnObj.DefaultProperties;
 
-#if KEEP_UNKNOWN_DEFAULT_PROPERTIES
 [StructLayout(LayoutKind.Explicit)]
 public struct FPropertyValue
 {
@@ -14,7 +14,6 @@ public struct FPropertyValue
     [FieldOffset(8)] internal string String;
     [FieldOffset(8)] internal FName Name;
 }
-#endif
 
 /// <summary>
 /// Stores the "metadata" of a default property.
@@ -26,17 +25,20 @@ public class FPropertyTag
     public FName Name, Type, TargetName;
     public int Size, ArrayIndex, ArraySize;
 
-#if KEEP_UNKNOWN_DEFAULT_PROPERTIES
     // This field stores the values of unrecognized properties where they can't be assigned directly to a UObject field
     // In an ideal world, this field will remain unused
     public FPropertyValue Value;
-#endif
 
     #endregion
 
     #region Accessors
 
     public override string ToString() => Name.GetString;
+
+    #endregion
+
+    #region Write test
+
 
     #endregion
 
@@ -50,14 +52,20 @@ public class FPropertyTag
         Ar.Serialize(ref Size);
         Ar.Serialize(ref ArrayIndex);
 
-        // Structs and Enums have an additional serialized field we need to take care of
-        if (Type == "StructProperty" || Type == "ByteProperty")
+        // These fields are treated as metadata and do not contribute
+        // to the Size field, hence they must be serialized now.
+        switch (Type.GetString)
         {
-            Ar.Serialize(ref TargetName);
-        }
-        else if (Type == "ArrayProperty")
-        {
-            Ar.Serialize(ref ArraySize);
+            case "StructProperty":
+            case "ByteProperty":
+                Ar.Serialize(ref TargetName);
+                break;
+            case "BoolProperty":
+                Ar.Serialize(ref Value.Bool);
+                break;
+            case "ArrayProperty":
+                Ar.Serialize(ref ArraySize);
+                break;
         }
 
         return true;
