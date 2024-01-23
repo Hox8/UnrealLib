@@ -18,12 +18,17 @@ public class UnrealPackage : UnrealArchive
     internal FObjectImport[] Imports;
     public FObjectExport[] Exports;
 
+    internal bool WasOriginallyCompressed;
+
     #region Accessors
 
     /// <summary>Returns the engine version this package was saved with, e.g. 864.</summary>
     public int GetEngineVersion() => Summary.EngineVersion;
     /// <summary>Returns the engine build number this package was saved with, e.g. 9714.</summary>
     public int GetEngineBuild() => Summary.EngineBuild;
+
+    public CompressionFlags GetCompressionFlags() => Summary.CompressionFlags;
+    public void SetCompressionFlags(CompressionFlags value) => Summary.CompressionFlags = value;
 
     #endregion
 
@@ -34,13 +39,21 @@ public class UnrealPackage : UnrealArchive
 
     public override void Load()
     {
+        if (HasError) return;
+
         try
         {
             Serialize(ref Summary);
 
-            if (Summary.IsStoredCompressed)
+            // Handle package compression
+            if ((Summary.CompressionFlags & CompressionFlags.ZLib) != 0)
             {
-                Error = ArchiveError.UnsupportedDecompress;
+                CompressionManager.DecompressPackage(this);
+                WasOriginallyCompressed = true;
+            }
+            else if ((Summary.CompressionFlags & CompressionFlags.None) != 0)
+            {
+                SetError(ArchiveError.UnsupportedDecompress);
                 return;
             }
 
@@ -50,14 +63,58 @@ public class UnrealPackage : UnrealArchive
 
             foreach (var import in Imports) import.Link(this);
             foreach (var export in Exports) export.Link(this);
-
-            // Bring down IB2's version. Seems to be incorrect
-            Version = Summary.EngineVersion == 864 ? 842 : Summary.EngineVersion;
         }
         catch
         {
-            Error = ArchiveError.FailedParse;
+            SetError(ArchiveError.FailedParse, null);
         }
+        }
+
+    public static UnrealPackage FromFile(string filePath, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false) => new(filePath, mode, access, makeCopy);
+
+    #endregion
+
+    public override long SaveToFile(string? path = null)
+    {
+        Position = 0;
+
+        StartSaving();
+
+        // Reserialize summary without compression data.
+        // No need to worry about offsets since package compression is done post-save
+        if (WasOriginallyCompressed)
+        {
+            Serialize(ref Summary);
+    }
+
+        // Compression testing
+#if !TRUE
+        base.Save(path);
+
+        // Ugly hacky re-open underlying buffer.
+        // I think I was doing this because decompressing sends bytes to ".temp", and I wanted to reuse the same filename. Just use something different...
+        // @TODO true problem lies with De/Compress methods not dealing with temp streams properly.
+        _buffer = File.Open(LastSavedFullPath, FileMode.Open, FileAccess.ReadWrite);
+
+        long oldLength = Length;
+
+        Console.Write($"Compressing {Name}...");  // So I don't forget to turn it off later
+        var sw = Stopwatch.StartNew();
+        CompressionManager.CompressPackage(this);
+        sw.Stop();
+
+        // string sizeString = $"{Globals.FormatSizeString(oldLength)} --> {Globals.FormatSizeString(Length)} ({(float)Length / oldLength:F4}%)";
+        string sizeString = $"{(float)Length / oldLength:F3}%";
+        string timeString = $"{sw.ElapsedMilliseconds}ms";
+
+        Console.Write("\b\b\b");
+        Console.SetCursorPosition(50, Console.CursorTop);
+        Console.Write(sizeString);
+        Console.SetCursorPosition(60, Console.CursorTop);
+        Console.WriteLine(timeString);
+#endif
+
+        return base.SaveToFile(path);
     }
 
     public FObjectResource? GetObject(int objectIndex)
@@ -81,7 +138,7 @@ public class UnrealPackage : UnrealArchive
     internal FNameEntry? GetNameEntry(int nameIndex) => (nameIndex >= 0 && nameIndex <= Names.Length) ? Names[nameIndex] : null;
 
     /// <summary>
-    /// Locates an <see cref="FObjectResource"/> within the Import and Export tables.
+    /// Locates an <see cref="FObjectResource"/> within the Import and Export tables. @TODO this isn't quite true anymore...
     /// </summary>
     /// <remarks>
     /// - Passing an object's Outer is recommended to narrow down results, but is not required.<br/>
