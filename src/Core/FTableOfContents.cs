@@ -14,7 +14,7 @@ public class FTableOfContents(Game game)
     /// <summary>
     /// A list containing all file entries within this TOC.
     /// </summary>
-    private List<FTOCEntry> Entries = new();
+    private readonly List<FTOCEntry> Entries = [];
 
     /// <summary>
     /// IB1 TOCs serialize an extra field (DVD starting sector; 5 fields instead of 4), which we need to account for.
@@ -38,7 +38,7 @@ public class FTableOfContents(Game game)
             string[] sub = line.Split(' ', System.StringSplitOptions.TrimEntries);
 
             Debug.Assert((sub.Length == 5 && sub[2] == "0") || sub.Length == toc.ValidLength); // IB1's StartSectors should never be non-zero.
-            Debug.Assert(sub[1] == "0"); // Uncompressed size should never be non-zero.
+            Debug.Assert(sub[1] == "0"); // Uncompressed size should never be non-zero (iOS IB).
 
             // Ignore arbitrarily-sized entries.
             if (sub.Length != toc.ValidLength) continue;
@@ -46,7 +46,7 @@ public class FTableOfContents(Game game)
             // Add entry if it isn't already present.
             if (!toc.TryGetEntry(sub[^2], out var entry))
             {
-                entry = new() { Filepath = sub[^2] };
+                entry = new(sub[^2], 0, 0);
                 int.TryParse(sub[0], out entry.FileSize);
                 int.TryParse(sub[1], out entry.UncompressedFileSize);
                 toc.Entries.Add(entry);
@@ -60,7 +60,8 @@ public class FTableOfContents(Game game)
     /// Serializes all TOC entries to a text file at the given path.
     /// </summary>
     /// <param name="outPath">Path to write the TOC file to. Existing files will be overwritten.</param>
-    public void Save(string outPath)
+    /// <returns>Number of bytes written.</returns>
+    public long Save(string outPath)
     {
         using (var fs = File.Create(outPath))
         {
@@ -69,6 +70,8 @@ public class FTableOfContents(Game game)
                 var line = $"{entry.FileSize} {entry.UncompressedFileSize} {DummyStartSector}{entry.Filepath} 0\r\n";
                 fs.Write(Encoding.ASCII.GetBytes(line));
             }
+
+            return fs.Position;
         }
     }
 
@@ -79,7 +82,7 @@ public class FTableOfContents(Game game)
     {
         if (!TryGetEntry(filename, out var entry))
         {
-            entry = new() { Filepath = filename };
+            entry = new(filename, 0, 0);
             Entries.Add(entry);
         }
 
@@ -92,7 +95,7 @@ public class FTableOfContents(Game game)
     /// Can be helpful for scenarios where the table is populated externally.
     /// </summary>
     public void AddEntry(string filename, int fileSize, int uncompressedSize) =>
-        Entries.Add(new FTOCEntry() { Filepath = filename, FileSize = fileSize, UncompressedFileSize = uncompressedSize});
+        Entries.Add(new FTOCEntry(filename, fileSize, uncompressedSize));
 
     public bool TryGetEntry(string fileName, out FTOCEntry outEntry)
     {
@@ -105,7 +108,7 @@ public class FTableOfContents(Game game)
             }
         }
 
-        outEntry = null;
+        outEntry = default;
         return false;
     }
 }
@@ -129,4 +132,11 @@ public record FTOCEntry
     /// </summary>
     /// <remarks>Deprecated; used only by IB1. This is not serialized for other games!</remarks>
     // public int StartSector;      // If this is always 0, we don't really need to have this as a field
+
+    public FTOCEntry(string path, int fileSize, int uncompressedSize)
+    {
+        Filepath = path;
+        FileSize = fileSize;
+        UncompressedFileSize = uncompressedSize;
+    }
 }
