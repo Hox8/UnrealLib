@@ -20,9 +20,11 @@ public class FName : ISerializable
 
     #region Accessors
 
-    /// <summary>Returns a reference to this FName's string.</summary>
+    /// <summary>Returns a reference to this FName's string without a number suffix.</summary>
     public string GetString => NameEntry.Name;
-    public override string ToString() => GetString;
+    /// <summary>Constructs a new string representing this FName and adding a number suffix if its Number is non-zero.</summary>
+    public string GetStringNumbered => NameEntry.Name + (Number > 0 ? $"_{Number - 1}" : "");
+    public override string ToString() => GetStringNumbered;
 
     #endregion
 
@@ -30,7 +32,7 @@ public class FName : ISerializable
 
     public static bool operator ==(FName a, FName b) => a.Number == b.Number && string.Equals(a.GetString, b.GetString, System.StringComparison.OrdinalIgnoreCase);
     public static bool operator !=(FName a, FName b) => !(a == b);
-    public static bool operator ==(FName a, string b) => string.Equals(a.GetString, b, System.StringComparison.OrdinalIgnoreCase);
+    public static bool operator ==(FName a, string b) => string.Equals(a.GetStringNumbered, b, System.StringComparison.OrdinalIgnoreCase);  // 90% of the time won't need to check number...
     public static bool operator !=(FName a, string b) => !(a == b);
 
     #endregion
@@ -76,11 +78,11 @@ public class FName : ISerializable
     }
 
     /// <summary>
-    /// Attempts to split a numbered name i.e. 'String_3' into separate Name + Number fields.
+    /// Attempts to split a numbered string name i.e. "String_3" into an FName (separate Name + Number fields).
     /// </summary>
-    /// <param name="input">The old-style name to be split.</param>
-    /// <param name="newName">The resultant string. Will equal the input string if conversion failed.</param>
-    /// <param name="newNumber">The resultant number. Will equal 0 if conversion failed.</param>
+    /// <param name="input">The string name to be split.</param>
+    /// <param name="newName">The resultant string name; populated only if conversion succeeds.</param>
+    /// <param name="newNumber">The resultant number. Set to 0 by default.</param>
     /// <returns>True if the conversion succeeded, otherwise false.</returns>
     public static bool SplitName(string input, out string newName, out int newNumber)
     {
@@ -90,13 +92,15 @@ public class FName : ISerializable
         // Get index of final underscore
         int index = input.LastIndexOf('_');
 
-        // If the underscore was not found, or it's the first/final char, return false
+        // Exit early (invalid number suffix) if...
+
+        // ...the underscore was the first/final char, or it wasn't found at all
         if (index <= 0 || index == input.Length) return false;
 
-        // If the number is padded i.e. '01' or '00033', return false
+        // ...the number is padded, e.g. '_01' or '_00053'
         if (input[index + 1] == '0' && index + 1 != input.Length - 1) return false;
 
-        // Return false if number was not a valid integer
+        // ...the number isn't valid
         if (!int.TryParse(input[(index + 1)..], out newNumber)) return false;
 
         newName = input[..index];
