@@ -1,7 +1,5 @@
-﻿using Microsoft.VisualStudio.TestPlatform.Utilities;
-using UnrealLib.Config.Coalesced;
+﻿using UnrealLib.Config.Coalesced;
 using UnrealLib.Enums;
-using Xunit.Abstractions;
 
 namespace Tests;
 
@@ -15,22 +13,20 @@ public class CoalescedTests
     public void Save_File_To_Folder_And_Back_To_File(string coalescedPath)
     {
         // Open Coalesced file
-        var coalesced = new Coalesced(coalescedPath);
-        coalesced.Load();
+        var coalesced = Coalesced.FromFile(coalescedPath);
 
         Assert.Equivalent(coalesced.HasError, false);
         Assert.True(coalesced.Inis.Count > 0);
 
         // Save Coalesced file to folder
         string folderPath = Path.ChangeExtension(coalescedPath, null);
-        coalesced.SaveFolder(folderPath);
+        coalesced.SaveToFolder(folderPath);
 
         int initialIniCount = coalesced.Inis.Count;
         Game initialGame = coalesced.Game;
 
         // Open the newly-created Coalesced folder
-        coalesced = new Coalesced(folderPath);
-        coalesced.LoadFolder();
+        coalesced = Coalesced.FromFolder(folderPath);
 
         Assert.Equivalent(coalesced.HasError, false);
 
