@@ -85,11 +85,13 @@ public class UTexture2D(FObjectExport export) : UTexture(export)
     /** Number of mips to remove when recompressing (does not work with TC_NormalmapUncompressed) */
     public int MipsToRemoveOnCompress;
 
+    private int StreamingIndex;
+
     /** 
     * Keep track of the first mip level stored in the packed miptail.
     * it's set to highest mip level if no there's no packed miptail 
     */
-    public int MipTailBaseIdx;
+    public int MipTailBaseIdx = -1;
 
     #endregion
 
@@ -125,7 +127,11 @@ public class UTexture2D(FObjectExport export) : UTexture(export)
         switch (tag.Name.GetString)
         {
             // BOOL
-            case nameof(bIsCompositingSource): Ar.Serialize(ref bIsCompositingSource); break;
+            case nameof(bIsCompositingSource): bIsCompositingSource = tag.Value.Bool; break;
+            case nameof(bPreserveBorderR): bPreserveBorderR = tag.Value.Bool; break;
+            case nameof(bPreserveBorderG): bPreserveBorderG = tag.Value.Bool; break;
+            case nameof(bPreserveBorderB): bPreserveBorderB = tag.Value.Bool; break;
+            case nameof(bPreserveBorderA): bPreserveBorderA = tag.Value.Bool; break;
 
             // INT
             case nameof(SizeX): Ar.Serialize(ref SizeX); break;
@@ -133,6 +139,11 @@ public class UTexture2D(FObjectExport export) : UTexture(export)
             case nameof(OriginalSizeX): Ar.Serialize(ref OriginalSizeX); break;
             case nameof(OriginalSizeY): Ar.Serialize(ref OriginalSizeY); break;
             case nameof(MipTailBaseIdx): Ar.Serialize(ref MipTailBaseIdx); break;
+            case nameof(NumCinematicMipLevels): Ar.Serialize(ref NumCinematicMipLevels); break;
+            case nameof(StreamingIndex): Ar.Serialize(ref StreamingIndex); break;
+
+            // FLOAT
+            case nameof(AdjustVibrance): Ar.Serialize(ref AdjustVibrance); break;
 
             // NAME
             case nameof(TextureFileCacheName): Ar.Serialize(ref TextureFileCacheName); break;

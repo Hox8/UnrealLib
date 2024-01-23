@@ -5,7 +5,7 @@ namespace UnrealLib.Experimental.Textures;
 
 public class UTexture(FObjectExport export) : USurface(export)
 {
-    FUntypedBulkData SourceArt;
+    public FUntypedBulkData SourceArt;
 
     #region Public enums
 
@@ -209,16 +209,17 @@ public class UTexture(FObjectExport export) : USurface(export)
         switch (tag.Name.GetString)
         {
             // BOOL
-            case nameof(SRGB): Ar.Serialize(ref SRGB); break;
-            case nameof(CompressionNoAlpha): Ar.Serialize(ref CompressionNoAlpha); break;
-            case nameof(NeverStream): Ar.Serialize(ref NeverStream); break;
-            case nameof(bForcePVRTC4): Ar.Serialize(ref bForcePVRTC4); break;
-            case nameof(CompressionNone): Ar.Serialize(ref CompressionNone); break;
-            case nameof(bIsSourceArtUncompressed): Ar.Serialize(ref bIsSourceArtUncompressed); break;
-            case nameof(DeferCompression): Ar.Serialize(ref DeferCompression); break;
+            case nameof(SRGB): SRGB = tag.Value.Bool; break;
+            case nameof(CompressionNoAlpha): CompressionNoAlpha = tag.Value.Bool; break;
+            case nameof(NeverStream): NeverStream = tag.Value.Bool; break;
+            case nameof(bForcePVRTC4): bForcePVRTC4 = tag.Value.Bool; break;
+            case nameof(CompressionNone): CompressionNone = tag.Value.Bool; break;
+            case nameof(bIsSourceArtUncompressed): bIsSourceArtUncompressed = tag.Value.Bool; break;
+            case nameof(DeferCompression): DeferCompression = tag.Value.Bool; break;
 
             // INT
             case nameof(InternalFormatLODBias): Ar.Serialize(ref InternalFormatLODBias); break;
+            case nameof(LODBias): Ar.Serialize(ref LODBias); break;
 
             // FLOAT
             case nameof(AdjustBrightnessCurve): Ar.Serialize(ref AdjustBrightness); break;
@@ -229,6 +230,13 @@ public class UTexture(FObjectExport export) : USurface(export)
             // FLOAT[]
             case nameof(UnpackMin): Ar.Serialize(ref UnpackMin[tag.ArrayIndex]); break;
 
+            // STRING
+            case nameof(SourceFilePath): Ar.Serialize(ref SourceFilePath); break;
+            case nameof(SourceFileTimestamp): Ar.Serialize(ref SourceFileTimestamp); break;
+
+            // FGUID
+            case nameof(LightingGuid): Ar.Serialize(ref LightingGuid); break;
+
             // ENUM
             case nameof(Filter): Ar.Serialize(ref tag.Value.Name); Filter = GetTextureFilter(tag.Value.Name); break;
             case nameof(LODGroup): Ar.Serialize(ref tag.Value.Name); LODGroup = GetTextureLodGroup(tag.Value.Name); break;
@@ -238,18 +246,46 @@ public class UTexture(FObjectExport export) : USurface(export)
         }
     }
 
+    #region Enum parsing
+
     private static TextureCompressionSettings GetCompressionSettings(FName name) => name.GetString switch
     {
+        "TC_Default" => TextureCompressionSettings.Default,
         "TC_Normalmap" => TextureCompressionSettings.Normalmap,
+        "TC_Displacementmap" => TextureCompressionSettings.Displacementmap,
         "TC_NormalmapAlpha" => TextureCompressionSettings.NormalmapAlpha,
+        "TC_Grayscale" => TextureCompressionSettings.Grayscale,
+        "TC_HighDynamicRange" => TextureCompressionSettings.HighDynamicRange,
+        "TC_OneBitAlpha" => TextureCompressionSettings.OneBitAlpha,
         "TC_NormalmapUncompressed" => TextureCompressionSettings.NormalmapUncompressed,
-        "TC_Grayscale" => TextureCompressionSettings.Grayscale
+        "TC_NormalmapBC5" => TextureCompressionSettings.NormalmapBC5,
+        "TC_OneBitMonochrome" => TextureCompressionSettings.OneBitMonochrome,
+        "TC_SimpleLightmapModification" => TextureCompressionSettings.SimpleLightmapModification,
+        "TC_VectorDisplacementmap" => TextureCompressionSettings.VectorDisplacementmap
     };
 
     private static TextureMipGenSettings GetMipGenSettings(FName name) => name.GetString switch
     {
+        "TMGS_FromTextureGroup" => TextureMipGenSettings.FromTextureGroup,
+        "TMGS_SimpleAverage" => TextureMipGenSettings.SimpleAverage,
+        "TMGS_Sharpen0" => TextureMipGenSettings.Sharpen0,
+        "TMGS_Sharpen1" => TextureMipGenSettings.Sharpen1,
+        "TMGS_Sharpen2" => TextureMipGenSettings.Sharpen2,
+        "TMGS_Sharpen3" => TextureMipGenSettings.Sharpen3,
+        "TMGS_Sharpen4" => TextureMipGenSettings.Sharpen4,
+        "TMGS_Sharpen5" => TextureMipGenSettings.Sharpen5,
+        "TMGS_Sharpen6" => TextureMipGenSettings.Sharpen6,
+        "TMGS_Sharpen7" => TextureMipGenSettings.Sharpen7,
+        "TMGS_Sharpen8" => TextureMipGenSettings.Sharpen8,
+        "TMGS_Sharpen9" => TextureMipGenSettings.Sharpen9,
+        "TMGS_Sharpen10" => TextureMipGenSettings.Sharpen10,
         "TMGS_NoMipmaps" => TextureMipGenSettings.NoMipmaps,
-        "TMGS_Sharpen4" => TextureMipGenSettings.Sharpen4
+        "TMGS_LeaveExistingMips" => TextureMipGenSettings.LeaveExistingMips,
+        "TMGS_Blur1" => TextureMipGenSettings.Blur1,
+        "TMGS_Blur2" => TextureMipGenSettings.Blur2,
+        "TMGS_Blur3" => TextureMipGenSettings.Blur3,
+        "TMGS_Blur4" => TextureMipGenSettings.Blur4,
+        "TMGS_Blur5" => TextureMipGenSettings.Blur5
     };
 
     private static TextureGroup GetTextureLodGroup(FName name) => name.GetString switch
@@ -289,4 +325,6 @@ public class UTexture(FObjectExport export) : USurface(export)
         "TF_Nearest" => TextureFilter.Nearest,
         "TF_Linear" => TextureFilter.Linear
     };
+
+    #endregion
 }
