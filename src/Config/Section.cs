@@ -135,9 +135,9 @@ public class Section : ISerializable
                 property.Key = property.Key[1..];
                 break;
 
-            // Array operator prefix not present. Default to Clear
+            // Array operator prefix not present. Default to AddUnconditional
             default:
-                operation = ArrayOperator.Clear;
+                operation = ArrayOperator.AddUnconditional;
                 break;
         }
 
@@ -145,9 +145,22 @@ public class Section : ISerializable
         switch (operation)
         {
             // Remove all properties with a matching Key
-            // This is the default behavior if no prefix is passed!
             case ArrayOperator.Clear:
-                Properties.RemoveAll(p => property.Key.Equals(p.Key, StringComparison.OrdinalIgnoreCase));
+                for (int i = Properties.Count - 1; i >= 0; i--)
+                {
+                    var curProp = Properties[i];
+
+                    // Extra logic to support both implicit and explicit array indexing, i.e. 'MyArray=', 'MyArray[0]='
+                    if (curProp.Key.StartsWith(property.Key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Delete property if its key matches exactly or it has an explicit array indexer
+                        if (curProp.Key.Length == property.Key.Length ||
+                            curProp.Key[property.Key.Length] == '[' && curProp.Key[^1] == ']')
+                        {
+                            Properties.RemoveAt(i);
+                        }
+                    }
+                }
                 break;
 
             // Removes the last property with a matching Key and Value
@@ -184,6 +197,7 @@ public class Section : ISerializable
                 break;
 
             // Add property unconditionally
+            // This is the default behavior if no prefix is passed!
             case ArrayOperator.AddUnconditional:
                 Properties.Add(property);
                 break;
