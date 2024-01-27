@@ -164,14 +164,12 @@ public class Section : ISerializable
                 break;
 
             // Removes the last property with a matching Key and Value
-            // @TODO should this remove all properties or just the first one found?
             case ArrayOperator.Remove:
                 foreach (var prop in Properties)
                 {
                     if (property.EqualsCaseInsensitive(prop))
                     {
                         Properties.Remove(prop);
-                        break;
                     }
                 }
                 break;
