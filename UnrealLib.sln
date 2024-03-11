@@ -7,7 +7,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "UnrealLib", "src\UnrealLib.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Tests", "tests\Tests.csproj", "{9B4E31EB-6670-4966-9462-B4070CC52C85}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PropertyGenerator", "PropertyGenerator\PropertyGenerator.csproj", "{78EB02EB-A250-41B9-AACF-EBFF7E5CE64D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PropertyGenerator", "PropertyGenerator\PropertyGenerator.csproj", "{78EB02EB-A250-41B9-AACF-EBFF7E5CE64D}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
