@@ -1,6 +1,9 @@
-﻿namespace UnrealLib.Enums;
+﻿using NetEscapades.EnumGenerators;
+
+namespace UnrealLib.Enums;
 
 /// <summary>Detail mode for primitive component rendering.</summary>
+[EnumExtensions]
 public enum EDetailMode
 {
     DM_Low,
@@ -12,6 +15,8 @@ public enum EDetailMode
 /// A priority for sorting scene elements by depth.
 /// Elements with higher priority occlude elements with lower priority, disregarding distance.
 /// </summary>
+
+[EnumExtensions]
 public enum ESceneDepthPriorityGroup
 {
     /// <summary>UnrealEd background scene DPG.</summary>
@@ -29,6 +34,7 @@ public enum ESceneDepthPriorityGroup
 /// <summary>
 /// Possible options for blend factor source for blending between textures.
 /// </summary>
+[EnumExtensions]
 public enum EMobileTextureBlendFactorSource
 {
     /// <summary>
@@ -45,6 +51,7 @@ public enum EMobileTextureBlendFactorSource
 /// <summary>
 /// Possible vertex texture coordinate sets that may used to sample textures on mobile platforms.
 /// </summary>
+[EnumExtensions]
 public enum EMobileTexCoordsSource
 {
     /// <summary>
@@ -71,6 +78,7 @@ public enum EMobileTexCoordsSource
 /// <summary>
 /// Possible vertex texture coordinate sets that may used to sample textures on mobile platforms.
 /// </summary>
+[EnumExtensions]
 public enum EMobileAlphaValueSource
 {
     /// <summary>
@@ -97,6 +105,7 @@ public enum EMobileAlphaValueSource
 /// <summary>
 /// Possible environment map blend modes.
 /// </summary>
+[EnumExtensions]
 public enum EMobileEnvironmentBlendMode
 {
     /// <summary>
@@ -110,6 +119,7 @@ public enum EMobileEnvironmentBlendMode
     MEBM_Lerp
 };
 
+[EnumExtensions]
 public enum EMobileSpecularMask
 {
     MSM_Constant,
@@ -125,6 +135,7 @@ public enum EMobileSpecularMask
     MSM_MaskTextureAlpha
 };
 
+[EnumExtensions]
 public enum EMobileAmbientOcclusionSource
 {
     MAOS_Disabled,
@@ -137,6 +148,7 @@ public enum EMobileAmbientOcclusionSource
 /// <summary>
 /// Possible sources for mobile emissive color.
 /// </summary>
+[EnumExtensions]
 public enum EMobileEmissiveColorSource
 {
     /// <summary>
@@ -158,6 +170,7 @@ public enum EMobileEmissiveColorSource
 /// <summary>
 /// Possible sources for mask values and such.
 /// </summary>
+[EnumExtensions]
 public enum EMobileValueSource
 {
     MVS_Constant,
@@ -183,6 +196,7 @@ public enum EMobileValueSource
 /// <summary>
 /// Possible vertex texture coordinate sets that may used to sample textures on mobile platforms.
 /// </summary>
+[EnumExtensions]
 public enum EMobileColorMultiplySource
 {
     MCMS_None,
@@ -196,6 +210,7 @@ public enum EMobileColorMultiplySource
     MCMS_MaskTextureAlpha,
 };
 
+[EnumExtensions]
 public enum EBlendMode
 {
     BLEND_Opaque,
@@ -209,6 +224,7 @@ public enum EBlendMode
     BLEND_DitheredTranslucent
 };
 
+[EnumExtensions]
 public enum EMaterialLightingModel
 {
     MLM_Phong,
