@@ -6,12 +6,12 @@ namespace UnrealLib.Enums.Textures;
 /// Bit-field flags that affects storage (e.g. packing, streaming) and other info about a lightmap.
 /// </summary>
 [Flags]
-public enum LightmapFlags
+public enum ELightmapFlags
 {
     /// <summary>No flags.</summary>
-    None = 0,
+    LMF_None = 0,
     /// <summary>Lightmap should be placed in a streaming texture.</summary>
-    Streamed = 1 << 0,
+    LMF_Streamed = 1 << 0,
     /// <summary>Whether this is a simple lightmap or not (directional coefficient).</summary>
-    SimpleLightmap = 1 << 1
+    LMF_SimpleLightmap = 1 << 1
 }
