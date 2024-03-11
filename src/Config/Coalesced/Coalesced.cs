@@ -7,8 +7,8 @@ namespace UnrealLib.Config.Coalesced;
 
 public class Coalesced : UnrealArchive
 {
-    private Game Game;
-    private List<Ini> Inis;
+    public Game Game;
+    public List<Ini> Inis;
     public CoalescedOptions Options = new();
 
     private const string HelperFileName = "ibhelper";
@@ -261,6 +261,8 @@ public class Coalesced : UnrealArchive
         if (TryGetIni(iniName, out result)) return false;
 
         result = new Ini { Path = iniName };
+        Inis.Add(result);
+
         return true;
     }
 
