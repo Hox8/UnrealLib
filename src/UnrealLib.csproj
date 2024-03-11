@@ -17,6 +17,8 @@
 		
 		<!-- Whether to use ArrayPool renting over standard allocations. There should be little reason to turn this off. -->
 		<DefineConstants>WITH_POOLING</DefineConstants>
+
+		<EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(OS)'!='Windows_NT'">
@@ -27,8 +29,12 @@
 		<DebugType>none</DebugType>
 	</PropertyGroup>
 
-	<!--<ItemGroup>
-		<ProjectReference Include="..\PropertyGenerator\PropertyGenerator.csproj" OutputItemType="Analyzer"/>
-	</ItemGroup>-->
+	<ItemGroup>
+		<PackageReference Include="NetEscapades.EnumGenerators" Version="1.0.0-beta08" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\PropertyGenerator\PropertyGenerator.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" />
+	</ItemGroup>
 
 </Project>
