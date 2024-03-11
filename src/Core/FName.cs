@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
@@ -7,75 +8,65 @@ public class FName : ISerializable
 {
     #region Serialized members
 
-    internal int Index = -1;
+    internal int Index;
     internal int Number;
 
     #endregion
 
-    #region Transient
+    #region Transient members
 
-    public FNameEntry NameEntry { get; internal set; }
-
-    #endregion
-
-    #region Accessors
-
-    /// <summary>Returns a reference to this FName's string without a number suffix.</summary>
-    public string GetString => NameEntry.Name;
-    /// <summary>Constructs a new string representing this FName and adding a number suffix if its Number is non-zero.</summary>
-    public string GetStringNumbered => NameEntry.Name + (Number > 0 ? $"_{Number - 1}" : "");
-    public override string ToString() => GetStringNumbered;
+    internal FNameEntry NameEntry;
 
     #endregion
 
-    #region Operators
+    #region Constructors
 
-    public static bool operator ==(FName a, FName b) => a.Number == b.Number && string.Equals(a.GetString, b.GetString, System.StringComparison.OrdinalIgnoreCase);
+    // Used by UnrealArchive serializer. Not to be used publicly!
+    public FName() { }
+
+    public FName(FNameEntry entry, int number = 0)
+    {
+        Debug.Assert(entry is not null);
+
+        Index = entry.Index;
+        Number = number;
+        NameEntry = entry;
+    }
+
+    #endregion
+
+    #region Equality
+
+    public static bool operator ==(FName a, FName b) => ReferenceEquals(a, b) || a is not null && b is not null && a.Index == b.Index && a.Number == b.Number;
     public static bool operator !=(FName a, FName b) => !(a == b);
-    public static bool operator ==(FName a, string b) => string.Equals(a.GetStringNumbered, b, System.StringComparison.OrdinalIgnoreCase);  // 90% of the time won't need to check number...
-    public static bool operator !=(FName a, string b) => !(a == b);
 
     #endregion
 
     public void Serialize(UnrealArchive Ar)
     {
-        if (Ar.IsLoading)
-        {
-            if (Ar.SerializeBinaryProperties)
-            {
-                Ar.Serialize(ref Index);
-                Ar.Serialize(ref Number);
+        Ar.Serialize(ref Index);
+        Ar.Serialize(ref Number);
 
-                // Linking here is SAFE as the name table is serialized before anything else.
-                // Casting is pretty dirty but nothing other than UnrealPackages should be using binary FNames so far
-                if (Ar is UnrealPackage pkg)
-                {
-                    NameEntry = pkg.GetNameEntry(Index);
-                    if (Number > 0) NameEntry.bDoOffset = true;
-                }
-            }
-            else
-            {
-                // Create a new NameEntry to store the string
-                NameEntry = new();
-                Ar.Serialize(ref NameEntry.Name);
-            }
-        }
-        else
+        if (Ar is UnrealPackage upk)
         {
-            if (Ar.SerializeBinaryProperties)
-            {
-                Debug.Assert(Index != -1, "Cannot serialize non-binary FName to binary format");
-
-                Ar.Serialize(ref Index);
-                Ar.Serialize(ref Number);
-            }
-            else
-            {
-                Ar.Serialize(ref NameEntry.Name);
-            }
+            NameEntry = upk.GetNameEntry(Index);
+            if (Number > 0) NameEntry.bDoOffset = true;
         }
     }
+
+    #region Accessors
+
+    public int GetIndex() => Index;
+    public int GetNumber() => Number - (NameEntry.bDoOffset ? 1 : 0);
+    public FNameEntry GetNameEntry() => NameEntry;
+    /// <summary>Returns this FName's string representation with its formatted number suffix, if applicable.</summary>
+    public override string ToString() => GetNumber() > 0 ? $"{NameEntry.Name}_{GetNumber()}" : NameEntry.Name;
+    /// <summary>Returns the FName's string representation without any number suffixes.</summary>
+    public string ToStringRaw() => NameEntry.Name;
+
+    #endregion
+
+    #region Helpers
 
     /// <summary>
     /// Attempts to split a numbered string name i.e. "String_3" into an FName (separate Name + Number fields).
@@ -106,4 +97,6 @@ public class FName : ISerializable
         newName = input[..index];
         return true;
     }
+
+    #endregion
 }
