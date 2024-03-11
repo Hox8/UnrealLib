@@ -1,16 +1,15 @@
-﻿using System;
-using UnrealLib.Core;
-using UnrealLib.Experimental.UnObj.DefaultProperties;
+﻿using UnrealLib.Core;
+using UnrealLib.UProperty;
 
 namespace UnrealLib.Experimental.Materials;
 
-public class UMaterialExpressionComment(FObjectExport export) : UMaterialExpression(export)
+public partial class UMaterialExpressionComment(FObjectExport? export = null) : UMaterialExpression(export)
 {
-    [Property]                  public int PosX;
-    [Property]                  public int PosY;
-    [Property]                  public int SizeX;
-    [Property]                  public int SizeY;
-    [Property]                  public string Text;
+    #region UProperties
 
+    [UProperty] public int PosX, PosY;
+    [UProperty] public int SizeX, SizeY;
+    [UProperty] public string Text;
 
+    #endregion
 }

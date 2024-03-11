@@ -1,201 +1,99 @@
-﻿using UnrealLib.Core;
-using UnrealLib.Experimental.UnObj.DefaultProperties;
+﻿using System;
+using UnrealLib.Core;
+using UnrealLib.Enums.Textures;
+using UnrealLib.UProperty;
 
 namespace UnrealLib.Experimental.Textures;
 
-public class UTexture(FObjectExport export) : USurface(export)
+public partial class UTexture(FObjectExport? export = null) : USurface(export), IDisposable
 {
-    public FUntypedBulkData SourceArt;
+    #region UProperties
 
-    #region Public enums
+    [UProperty] public bool SRGB = true;
+    [UProperty] public bool RGBE;
 
-    public enum TextureCompressionSettings
-    {
-        Default,
-        Normalmap,
-        Displacementmap,
-        NormalmapAlpha,
-        Grayscale,
-        HighDynamicRange,
-        OneBitAlpha,
-        NormalmapUncompressed,
-        NormalmapBC5,
-        OneBitMonochrome,
-        SimpleLightmapModification,
-        VectorDisplacementmap
-    };
+    [UProperty] public bool bIsSourceArtUncompressed;
 
-    public enum TextureFilter
-    {
-        Nearest,
-        Linear
-    };
+    [UProperty] public bool CompressionNoAlpha;
+    [UProperty] public bool CompressionNone;
+    [UProperty] public bool CompressionNoMipmaps;           // DEPRECATED
+    [UProperty] public bool CompressionFullDynamicRange;
+    [UProperty] public bool DeferCompression;
 
-    public enum TextureAddress
-    {
-        Wrap,
-        Clamp,
-        Mirror
-    };
+    [UProperty] public bool NeverStream;
 
-    public enum TextureGroup
-    {
-        World,
-        WorldNormalMap,
-        WorldSpecular,
-        Character,
-        CharacterNormalMap,
-        CharacterSpecular,
-        Weapon,
-        WeaponNormalMap,
-        WeaponSpecular,
-        Vehicle,
-        VehicleNormalMap,
-        VehicleSpecular,
-        Cinematic,
-        Effects,
-        EffectsNotFiltered,
-        Skybox,
-        UI,
-        Lightmap,
-        RenderTarget,
-        MobileFlattened,
-        ProcBuilding_Face,
-        ProcBuilding_LightMap,
-        Shadowmap,
-        ColorLookupTable,
-        Terrain_Heightmap,
-        Terrain_Weightmap,
-        ImageBasedReflection,
-        Bokeh
-    };
+    /// <summary>
+    /// When TRUE, the alpha channel of mip-maps and the base image are dithered for smooth LOD transitions.
+    /// </summary>
+    [UProperty] public bool bDitherMipMapAlpha;
 
-    public enum TextureMipGenSettings
-    {
-        // default for the "texture"
-        FromTextureGroup,
-        // 2x2 average, default for the "texture group"
-        SimpleAverage,
-        // 8x8 with sharpening: 0=no sharpening but better quality which is softer, 1..little, 5=medium, 10=extreme
-        Sharpen0,
-        Sharpen1,
-        Sharpen2,
-        Sharpen3,
-        Sharpen4,
-        Sharpen5,
-        Sharpen6,
-        Sharpen7,
-        Sharpen8,
-        Sharpen9,
-        Sharpen10,
-        NoMipmaps,
-        // Do not touch existing mip chain as it contains generated data
-        LeaveExistingMips,
-        // blur further (useful for image based reflections)
-        Blur1,
-        Blur2,
-        Blur3,
-        Blur4,
-        Blur5
-    };
-
-    public enum ETextureMipCount
-    {
-        ResidentMips,
-        AllMips,
-        AllMipsBiased,
-    };
-
-    #endregion
-
-    #region Properties
-
-    public bool SRGB;
-    public bool RGBE;
-
-    public float[] UnpackMin = new float[4] { 0.0f, 0.0f, 0.0f, 0.0f };
-    public float[] UnpackMax = new float[4] { 1.0f, 1.0f, 1.0f, 1.0f };
-
-    // UntypedBulkDaMirror SourceArt
-
-    public bool bIsSourceArtUncompressed;
-
-    public bool CompressionNoAlpha;
-    public bool CompressionNone;
-    public bool CompressionNoMipmaps;
-    public bool CompressionFullDynamicRange;
-    public bool DeferCompression;
-    public bool NeverStream;
-
-    /// <summary>When TRUE, the alpha channel of mip-maps and the base image are dithered for smooth LOD transitions.</summary>
-    public bool bDitherMipMapAlpha;
-
-    /// <summary>If TRUE, the color border pixels are preserved by mipmap generation. One flag per color channel.</summary>
-    public bool bPreserveBorderR;
-    public bool bPreserveBorderG;
-    public bool bPreserveBorderB;
-    public bool bPreserveBorderA;
+    /// <summary>If TRUE, the color border pixels are preserved by mipmap generation.</summary>
+    /// <remarks>One flag per color channel.</remarks>
+    [UProperty] public bool bPreserveBorderR, bPreserveBorderG, bPreserveBorderB, bPreserveBorderA;
 
     /// <summary>If TRUE, the RHI texture will be created using TexCreate_NoTiling.</summary>
-    public /*const*/ bool bNoTiling;
+    [UProperty] public bool bNoTiling;
 
-    /// <summary>For DXT1 textures, setting this will cause the texture to be twice the size, but better looking, on iPhone.</summary>
-    public bool bForcePVRTC4;
+    /// <summary>
+    /// For DXT1 textures, setting this will cause the texture to be twice the size, but better looking, on iPhone.
+    /// </summary>
+    [UProperty] public bool bForcePVRTC4;
 
-    public TextureCompressionSettings CompressionSettings = TextureCompressionSettings.Default;
+    [UProperty] public float[] UnpackMin = new float[4];
+    [UProperty] public float[] UnpackMax = [1.0f, 1.0f, 1.0f, 1.0f];
+
+    [UProperty] public TextureCompressionSettings CompressionSettings = TextureCompressionSettings.TC_Default;
 
     /// <summary>The texture filtering mode to use when sampling this texture.</summary>
-    public TextureFilter Filter = TextureFilter.Nearest;
+    [UProperty] public TextureFilter Filter = TextureFilter.TF_Linear;
 
     /// <summary>Texture group this texture belongs to for LOD bias.</summary>
-    public TextureGroup LODGroup = TextureGroup.World;
+    [UProperty] public TextureGroup LODGroup;
+
+    /// <summary>A bias to the index of the top mip level to use.</summary>
+    [UProperty] public int LODBias;
+
+    /// <summary>Number of mip-levels to use for cinematic quality.</summary>
+    [UProperty] public int NumCinematicMipLevels;
+
+    /// <summary>Path to the resource used to construct this texture.</summary>
+    [UProperty] public string SourceFilePath;
+    /// <summary>Date/Time-stamp of the file from the last import.</summary>
+    [UProperty] public string SourceFileTimestamp;
+
+    /// <summary>Unique ID for this material, used for caching during distributed lighting.</summary>
+    [UProperty] public FGuid LightingGuid;
+
+    /// <summary>Static texture brightness adjustment (scales HSV value.)</summary>
+    [UProperty] public float AdjustBrightness = 1.0f;
+    /// <summary>Static texture curve adjustment (raises HSV value to the specified power.)</summary>
+    [UProperty] public float AdjustBrightnessCurve = 1.0f;
+    /// <summary>Static texture "vibrance" adjustment (0 - 1) (HSV saturation algorithm adjustment.)</summary>
+    [UProperty] public float AdjustVibrance;
+    /// <summary>Static texture saturation adjustment (scales HSV saturation.)</summary>
+    [UProperty] public float Saturation = 1.0f;
+    /// <summary>Static texture RGB curve adjustment (raises linear-space RGB color to the specified power.)</summary>
+    [UProperty] public float AdjustRGBCurve = 1.0f;
+    /// <summary>Static texture hue adjustment (0 - 360) (offsets HSV hue by value in degrees.)</summary>
+    [UProperty] public float AdjustHue;
 
     /// <summary>
-    /// A bias to the index of the top mip level to use.
+    /// Internal LOD bias already applied by the texture format (eg TC_NormalMapUncompressed).
+    /// Used to adjust MinLODMipCount and MaxLODMipCount in CalculateLODBias .
     /// </summary>
-    public int LODBias = 0;
+    [UProperty] public int InternalFormatLODBias;
 
     /// <summary>
-    /// Number of mip-levels to use for cinematic quality.
+    /// Per asset specific setting to define the mip-map generation properties like sharpening and kernel size.
     /// </summary>
-    public int NumCinematicMipLevels = 0;
-
-    ///<summary>Path to the resource used to construct this texture</summary>
-    public string SourceFilePath;
-    ///<summary>Date/Time-stamp of the file from the last import</summary>
-    public string SourceFileTimestamp;
-
-    ///<summary>The texture's resource.</summary>
-    // var native const pointer Resource{FTextureResource};
-
-    ///<summary>Unique ID for this material, used for caching during distributed lighting.</summary>
-    private FGuid LightingGuid;
-
-    ///<summary>Static texture brightness adjustment (scales HSV value) (Non-destructive; Requires texture source art to be available).</summary>
-    public float AdjustBrightness;
-
-    ///<summary>Static texture curve adjustment (raises HSV value to the specified power) (Non-destructive; Requires texture source art to be available).</summary>
-    public float AdjustBrightnessCurve;
-
-    ///<summary>Static texture "vibrance" adjustment (0 - 1) (HSV saturation algorithm adjustment) (Non-destructive; Requires texture source art to be available).</summary>
-    public float AdjustVibrance;
-
-    ///<summary>Static texture saturation adjustment (scales HSV saturation) (Non-destructive; Requires texture source art to be available).</summary>
-    public float AdjustSaturation;
-
-    ///<summary>Static texture RGB curve adjustment (raises linear-space RGB color to the specified power) (Non-destructive; Requires texture source art to be available).</summary>
-    public float AdjustRGBCurve;
-
-    ///<summary>Static texture hue adjustment (0 - 360) (offsets HSV hue by value in degrees) (Non-destructive; Requires texture source art to be available).</summary>
-    public float AdjustHue;
-
-    ///<summary>Internal LOD bias already applied by the texture format (eg NormalMapUncompressed). Used to adjust MinLODMipCount and MaxLODMipCount in CalculateLODBias.</summary>
-    public int InternalFormatLODBias;
-
-    ///<summary>Per asset specific setting to define the mip-map generation properties like sharpening and kernel size.</summary>
-    public TextureMipGenSettings MipGenSettings = TextureMipGenSettings.FromTextureGroup;
+    [UProperty] public TextureMipGenSettings MipGenSettings;
 
     #endregion
+
+    public FUntypedBulkData SourceArt;
+
+    /// <summary>The texture's resource.</summary>
+    // public FTextureResource Resource;
 
     public override void Serialize(UnrealArchive Ar)
     {
@@ -204,127 +102,15 @@ public class UTexture(FObjectExport export) : USurface(export)
         Ar.Serialize(ref SourceArt);
     }
 
-    internal override void ParseProperty(UnrealArchive Ar, FPropertyTag tag)
+    public virtual void Dispose()
     {
-        switch (tag.Name.GetString)
-        {
-            // BOOL
-            case nameof(SRGB): SRGB = tag.Value.Bool; break;
-            case nameof(CompressionNoAlpha): CompressionNoAlpha = tag.Value.Bool; break;
-            case nameof(NeverStream): NeverStream = tag.Value.Bool; break;
-            case nameof(bForcePVRTC4): bForcePVRTC4 = tag.Value.Bool; break;
-            case nameof(CompressionNone): CompressionNone = tag.Value.Bool; break;
-            case nameof(bIsSourceArtUncompressed): bIsSourceArtUncompressed = tag.Value.Bool; break;
-            case nameof(DeferCompression): DeferCompression = tag.Value.Bool; break;
+        SourceArt?.Dispose();
 
-            // INT
-            case nameof(InternalFormatLODBias): Ar.Serialize(ref InternalFormatLODBias); break;
-            case nameof(LODBias): Ar.Serialize(ref LODBias); break;
-
-            // FLOAT
-            case nameof(AdjustBrightnessCurve): Ar.Serialize(ref AdjustBrightness); break;
-            case nameof(AdjustBrightness): Ar.Serialize(ref AdjustBrightness); break;
-            case nameof(AdjustSaturation): Ar.Serialize(ref AdjustSaturation); break;
-            case nameof(AdjustRGBCurve): Ar.Serialize(ref AdjustRGBCurve); break;
-
-            // FLOAT[]
-            case nameof(UnpackMin): Ar.Serialize(ref UnpackMin[tag.ArrayIndex]); break;
-
-            // STRING
-            case nameof(SourceFilePath): Ar.Serialize(ref SourceFilePath); break;
-            case nameof(SourceFileTimestamp): Ar.Serialize(ref SourceFileTimestamp); break;
-
-            // FGUID
-            case nameof(LightingGuid): Ar.Serialize(ref LightingGuid); break;
-
-            // ENUM
-            case nameof(Filter): Ar.Serialize(ref tag.Value.Name); Filter = GetTextureFilter(tag.Value.Name); break;
-            case nameof(LODGroup): Ar.Serialize(ref tag.Value.Name); LODGroup = GetTextureLodGroup(tag.Value.Name); break;
-            case nameof(CompressionSettings): Ar.Serialize(ref tag.Value.Name); CompressionSettings = GetCompressionSettings(tag.Value.Name); break;
-            case nameof(MipGenSettings): Ar.Serialize(ref tag.Value.Name); MipGenSettings = GetMipGenSettings(tag.Value.Name); break;
-            default: base.ParseProperty(Ar, tag); break;
-        }
+        GC.SuppressFinalize(this);
     }
 
-    #region Enum parsing
-
-    private static TextureCompressionSettings GetCompressionSettings(FName name) => name.GetString switch
+    public static void ParseProperties(UTexture texture, UnrealArchive Ar)
     {
-        "TC_Default" => TextureCompressionSettings.Default,
-        "TC_Normalmap" => TextureCompressionSettings.Normalmap,
-        "TC_Displacementmap" => TextureCompressionSettings.Displacementmap,
-        "TC_NormalmapAlpha" => TextureCompressionSettings.NormalmapAlpha,
-        "TC_Grayscale" => TextureCompressionSettings.Grayscale,
-        "TC_HighDynamicRange" => TextureCompressionSettings.HighDynamicRange,
-        "TC_OneBitAlpha" => TextureCompressionSettings.OneBitAlpha,
-        "TC_NormalmapUncompressed" => TextureCompressionSettings.NormalmapUncompressed,
-        "TC_NormalmapBC5" => TextureCompressionSettings.NormalmapBC5,
-        "TC_OneBitMonochrome" => TextureCompressionSettings.OneBitMonochrome,
-        "TC_SimpleLightmapModification" => TextureCompressionSettings.SimpleLightmapModification,
-        "TC_VectorDisplacementmap" => TextureCompressionSettings.VectorDisplacementmap
-    };
 
-    private static TextureMipGenSettings GetMipGenSettings(FName name) => name.GetString switch
-    {
-        "TMGS_FromTextureGroup" => TextureMipGenSettings.FromTextureGroup,
-        "TMGS_SimpleAverage" => TextureMipGenSettings.SimpleAverage,
-        "TMGS_Sharpen0" => TextureMipGenSettings.Sharpen0,
-        "TMGS_Sharpen1" => TextureMipGenSettings.Sharpen1,
-        "TMGS_Sharpen2" => TextureMipGenSettings.Sharpen2,
-        "TMGS_Sharpen3" => TextureMipGenSettings.Sharpen3,
-        "TMGS_Sharpen4" => TextureMipGenSettings.Sharpen4,
-        "TMGS_Sharpen5" => TextureMipGenSettings.Sharpen5,
-        "TMGS_Sharpen6" => TextureMipGenSettings.Sharpen6,
-        "TMGS_Sharpen7" => TextureMipGenSettings.Sharpen7,
-        "TMGS_Sharpen8" => TextureMipGenSettings.Sharpen8,
-        "TMGS_Sharpen9" => TextureMipGenSettings.Sharpen9,
-        "TMGS_Sharpen10" => TextureMipGenSettings.Sharpen10,
-        "TMGS_NoMipmaps" => TextureMipGenSettings.NoMipmaps,
-        "TMGS_LeaveExistingMips" => TextureMipGenSettings.LeaveExistingMips,
-        "TMGS_Blur1" => TextureMipGenSettings.Blur1,
-        "TMGS_Blur2" => TextureMipGenSettings.Blur2,
-        "TMGS_Blur3" => TextureMipGenSettings.Blur3,
-        "TMGS_Blur4" => TextureMipGenSettings.Blur4,
-        "TMGS_Blur5" => TextureMipGenSettings.Blur5
-    };
-
-    private static TextureGroup GetTextureLodGroup(FName name) => name.GetString switch
-    {
-        "TEXTUREGROUP_World" => TextureGroup.World,
-        "TEXTUREGROUP_WorldNormalMap" => TextureGroup.WorldNormalMap,
-        "TEXTUREGROUP_WorldSpecular" => TextureGroup.WorldSpecular,
-        "TEXTUREGROUP_Character" => TextureGroup.Character,
-        "TEXTUREGROUP_CharacterNormalMap" => TextureGroup.CharacterNormalMap,
-        "TEXTUREGROUP_CharacterSpecular" => TextureGroup.CharacterSpecular,
-        "TEXTUREGROUP_Weapon" => TextureGroup.Weapon,
-        "TEXTUREGROUP_WeaponNormalMap" => TextureGroup.WeaponNormalMap,
-        "TEXTUREGROUP_WeaponSpecular" => TextureGroup.WeaponSpecular,
-        "TEXTUREGROUP_Vehicle" => TextureGroup.Vehicle,
-        "TEXTUREGROUP_VehicleNormalMap" => TextureGroup.VehicleNormalMap,
-        "TEXTUREGROUP_VehicleSpecular" => TextureGroup.VehicleSpecular,
-        "TEXTUREGROUP_Cinematic" => TextureGroup.Cinematic,
-        "TEXTUREGROUP_Effects" => TextureGroup.Effects,
-        "TEXTUREGROUP_EffectsNotFiltered" => TextureGroup.EffectsNotFiltered,
-        "TEXTUREGROUP_Skybox" => TextureGroup.Skybox,
-        "TEXTUREGROUP_UI" => TextureGroup.UI,
-        "TEXTUREGROUP_Lightmap" => TextureGroup.Lightmap,
-        "TEXTUREGROUP_RenderTarget" => TextureGroup.RenderTarget,
-        "TEXTUREGROUP_MobileFlattened" => TextureGroup.MobileFlattened,
-        "TEXTUREGROUP_ProcBuilding_Face" => TextureGroup.ProcBuilding_Face,
-        "TEXTUREGROUP_ProcBuilding_LightMap" => TextureGroup.ProcBuilding_LightMap,
-        "TEXTUREGROUP_Shadowmap" => TextureGroup.Shadowmap,
-        "TEXTUREGROUP_ColorLookupTable" => TextureGroup.ColorLookupTable,
-        "TEXTUREGROUP_Terrain_Heightmap" => TextureGroup.Terrain_Heightmap,
-        "TEXTUREGROUP_Terrain_Weightmap" => TextureGroup.Terrain_Weightmap,
-        "TEXTUREGROUP_ImageBasedReflection" => TextureGroup.ImageBasedReflection,
-        "TEXTUREGROUP_Bokeh" => TextureGroup.Bokeh
-    };
-
-    private static TextureFilter GetTextureFilter(FName name) => name.GetString switch
-    {
-        "TF_Nearest" => TextureFilter.Nearest,
-        "TF_Linear" => TextureFilter.Linear
-    };
-
-    #endregion
+    }
 }

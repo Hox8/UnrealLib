@@ -1,17 +1,21 @@
 ﻿using UnrealLib.Core;
 using UnrealLib.Enums.Textures;
+using UnrealLib.UProperty;
 
 namespace UnrealLib.Experimental.Textures;
 
-public class ULightMapTexture2D(FObjectExport export) : UTexture2D(export)
+public partial class ULightMapTexture2D(FObjectExport export) : UTexture2D(export)
 {
-    // private LightmapFlags LightmapFlags;
+    [UProperty] public new TextureGroup LODGroup = TextureGroup.TEXTUREGROUP_Lightmap;
 
-    //public override void Serialize(UnrealArchive stream)
-    //{
-    //    base.Serialize(stream);
+    private ELightmapFlags LightmapFlags;
 
-    //    stream.Serialize(ref LightmapFlags);
-    //    LODGroup = TextureGroup.Lightmap;
-    //}
+    public override void Serialize(UnrealArchive stream)
+    {
+        base.Serialize(stream);
+
+        stream.Serialize(ref LightmapFlags);
+
+        LODGroup = TextureGroup.TEXTUREGROUP_Lightmap;
+    }
 }

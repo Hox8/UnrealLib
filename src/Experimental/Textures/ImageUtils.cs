@@ -107,7 +107,7 @@ public static class ImageUtils
     public static void PrepareUE3TextureForExport(ref Span<byte> data, int width, int height, UTexture2D texture)
     {
         // Expand V8U8 (uncompressed normal map) to RGB
-        if (texture.Format is Enums.Textures.PixelFormat.V8U8)
+        if (texture.Format is Enums.Textures.EPixelFormat.PF_V8U8)
         {
             V8U8toR8G8B8(ref data, width, height);
         }
@@ -117,15 +117,17 @@ public static class ImageUtils
         {
             SwapEndianness(data, 4);
         }
+        else Console.WriteLine(texture.Format.ToString());
 
-        if (texture.CompressionNoAlpha || texture is ULightMapTexture2D)
-        {
-            RemoveAlpha(ref data, width, height);
-        }
-        else
-        {
-            RemoveAlphaIfEmpty(ref data, width, height);
-        }
+        // This is removing valid alphas!
+        //if (texture.CompressionNoAlpha || texture is ULightMapTexture2D)
+        //{
+        //    RemoveAlpha(ref data, width, height);
+        //}
+        //else
+        //{
+        //    RemoveAlphaIfEmpty(ref data, width, height);
+        //}
     }
 
     /// <summary>

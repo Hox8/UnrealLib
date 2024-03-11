@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using UnrealLib.Core;
 using UnrealLib.Experimental.Component;
 using UnrealLib.Experimental.UnObj.DefaultProperties;
@@ -6,7 +7,7 @@ using UnrealLib.Interfaces;
 
 namespace UnrealLib.Experimental.UnObj;
 
-public class UObject(FObjectExport? export = null) : PropertyHolder, ISerializable
+public partial class UObject(FObjectExport? export = null) : PropertyHolder, ISerializable
 {
     #region Serialized members
 
@@ -17,7 +18,7 @@ public class UObject(FObjectExport? export = null) : PropertyHolder, ISerializab
     #region Transient members
 
     public FObjectExport? Export { get; init; } = export;
-    public bool Loaded { get; internal set; } = false;
+    public bool Loaded { get; internal set; }
 
     #endregion
 
@@ -44,26 +45,28 @@ public class UObject(FObjectExport? export = null) : PropertyHolder, ISerializab
         Ar.Serialize(ref NetIndex);
 
         // UClasses (null) and Components do not serialize script properties
-        if (!Ar.SerializeBinaryProperties || Export.Class is not null && this is not UComponent)
+        if (!Ar.SerializeBinaryProperties || Export.Class is not null)
         {
-            SerializeProperties(Ar);
+            SerializeScriptProperties((UnrealPackage)Ar);
         }
+
+        Loaded = true;
     }
-}
 
-public struct UObjectIndex<T> where T : UObject, ISerializable
-{
-    public T Object;
-
-    public void Serialize(UnrealPackage Ar)
+    public void EnsureLoaded(UnrealArchive Ar)
     {
-        if (!Ar.IsLoading) throw new Exception();
-
-        int index = default;
-        Ar.Serialize(ref index);
-        if (Ar.GetObject(index) is FObjectExport export)
+        if (!Loaded)
         {
-            UnrealPackage.GetUObject(export);
+            Debug.Assert(Export is not null);
+
+            var prePos = Ar.Position;
+
+            Ar.Position = Export.SerialOffset;
+
+            // Serialize() sets Loaded
+            Serialize(Ar);
+
+            Ar.Position = prePos;
         }
     }
 }

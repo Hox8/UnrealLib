@@ -1,5 +1,8 @@
-﻿namespace UnrealLib.Experimental.Infinity_Blade;
+﻿using NetEscapades.EnumGenerators;
 
+namespace UnrealLib.Experimental.Infinity_Blade;
+
+[EnumExtensions]
 public enum eTouchRewardActor : byte
 {
     TRA_Random,
@@ -45,6 +48,7 @@ public enum eTouchRewardActor : byte
     TRA_Potion_New9
 };
 
+[EnumExtensions]
 public enum ClashMobRewardState
 {
     CMRS_NoState,
@@ -53,6 +57,7 @@ public enum ClashMobRewardState
     CMRS_PendingGiveToPlayer
 };
 
+[EnumExtensions]
 public enum eNewWorldType
 {
     NWT_SaveStart,
@@ -63,6 +68,7 @@ public enum eNewWorldType
     NWT_MinusStart
 };
 
+[EnumExtensions]
 public enum eElementalType
 {
     AET_Random,
@@ -76,6 +82,7 @@ public enum eElementalType
     AET_Water
 };
 
+[EnumExtensions]
 public enum eAchievements
 {
     A_NONE,

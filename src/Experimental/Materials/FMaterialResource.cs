@@ -7,7 +7,7 @@ using UnrealLib.Interfaces;
 
 namespace UnrealLib.Experimental.Materials;
 
-public class FMaterial// : ISerializable
+public class FMaterial : ISerializable
 {
     #region Serialized members
 
@@ -27,6 +27,11 @@ public class FMaterial// : ISerializable
 
     // UTexture*
     public UTexture UniformExpressionTextures;
+
+    public void Serialize(UnrealArchive Ar)
+    {
+        throw new System.NotImplementedException();
+    }
 
     #endregion
 

@@ -3,4 +3,4 @@ using UnrealLib.Experimental.UnObj;
 
 namespace UnrealLib.Experimental.Textures;
 
-public class USurface(FObjectExport export) : UObject(export) { }
+public partial class USurface(FObjectExport export) : UObject(export);
