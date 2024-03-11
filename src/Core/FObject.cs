@@ -18,8 +18,10 @@ public abstract class FObjectResource
     #endregion
 
     #region Transient members
- 
-    public int TableOffset { get; internal set; }           // File offset of the start of this FObject's header in the table
+
+    public int TableOffset;           // File offset of the start of this FObject's header in the table
+    public int Index;
+    public int FormattedIndex => this is FObjectExport ? Index + 1 : ~Index;
     public FObjectResource? Outer { get; protected set; }   // This resource's Outer
     public UnrealPackage Package { get; set; }    // The UnrealPackage this export belongs to
 #if TRACK_OBJECT_USAGE
@@ -31,10 +33,10 @@ public abstract class FObjectResource
 
     #region Accessors
 
-    public string GetName() => ObjectName.GetString;    // Name of just this object resource
+    public string GetName() => ObjectName.ToString();    // Name of just this object resource
     public string GetFullName()
     {
-        var sb = new StringBuilder(ObjectName.GetStringNumbered);
+        var sb = new StringBuilder(ObjectName.ToString());
 
         for (FObjectResource outer = Outer; outer is not null; outer = outer.Outer)
         {
@@ -43,15 +45,18 @@ public abstract class FObjectResource
 
         return sb.ToString();
     }
+
     public override string ToString() => GetFullName();
 
     #endregion
 
-    public virtual void Link(UnrealPackage Ar)
+    public virtual void Link(UnrealPackage Ar, int index)
     {
+        Index = index;
+
         Package = Ar;
 
-        ObjectName.NameEntry.Users.Add(this);
+        ObjectName.GetNameEntry().Users.Add(this);
 
         Outer = Ar.GetObject(OuterIndex);
 
@@ -118,7 +123,24 @@ public sealed class FObjectExport : FObjectResource, ISerializable
     #region Acessors
 
     public int GetSerialOffset() => SerialOffset;
-    public int SetSerialOffset(int offset) => SerialOffset = offset;
+    public void SetSerialOffset(int offset) => SerialOffset = offset;
+
+    public int GetSerialSize() => SerialSize;
+    public void SetSerialSize(int size) => SerialSize = size;
+
+    /// <summary>
+    /// Returns the topmost FObjectExport.
+    /// </summary>
+    public FObjectExport GetRoot()
+    {
+        FObjectExport? obj = this;
+        while (obj.Outer is FObjectExport export)
+        {
+            obj = export;
+        }
+
+        return obj;
+    }
 
     #endregion
 
@@ -142,9 +164,9 @@ public sealed class FObjectExport : FObjectResource, ISerializable
         Ar.Serialize(ref PackageFlags);
     }
 
-    public override void Link(UnrealPackage Ar)
+    public override void Link(UnrealPackage Ar, int index)
     {
-        base.Link(Ar);
+        base.Link(Ar, index);
 
         Class = Ar.GetObject(ClassIndex);
         Super = Ar.GetObject(SuperIndex);

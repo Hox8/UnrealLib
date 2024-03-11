@@ -37,7 +37,7 @@ public class FPackageFileSummary : ISerializable
     internal int PackageSource;                             // Value determining whether this package is "official" or user-created
 
     internal string[] AdditionalPackagesToCook;             // References to other packages, most commonly Kismet streamed levels
-    internal FTextureAllocations TextureAllocations;       // Table containing exports with inlined textures
+    internal FTextureAllocations TextureAllocations;        // Table containing exports with inlined textures
 
     public long OffsetEnd { get; set; }
 

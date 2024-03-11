@@ -15,13 +15,15 @@ public class FNameEntry : ISerializable
 
     #region Transient members
 
+    // This NameEntry's index into the package's name table
+    internal int Index;
+
     // List to track FObjectResource usage of this FNameEntry
     internal List<FObjectResource> Users = [];
 
     // This is used to keep FName numbers consistent with that of UEE.
     // This is a hack; I don't understand how it works.
-    // Set during FObjectResource::Link()
-    internal bool bDoOffset = false;
+    internal bool bDoOffset;
 
     #endregion
 

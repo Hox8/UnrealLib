@@ -10,7 +10,7 @@ public struct FTextureAllocations : ISerializable
         internal int SizeX;
         internal int SizeY;
         internal int NumMips;
-        internal PixelFormat Format;
+        internal EPixelFormat Format;
         internal TextureCreateFlags TexCreateFlags;
         internal int[] ExportIndicies;
 

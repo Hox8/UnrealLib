@@ -1,22 +1,30 @@
 ﻿using System;
+using System.Buffers;
 using System.Diagnostics;
-using UnrealLib.Core.Compression;
 using UnrealLib.Enums;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib.Core;
 
-public class FUntypedBulkData : ISerializable
+public class FUntypedBulkData : ISerializable, IDisposable
 {
     #region Serialized members
 
-    /// <summary>Serialized flags for bulk data.</summary>
-    internal BulkDataFlags BulkDataFlags = BulkDataFlags.None;
-    /// <summary>Uncompressed size?</summary>
+    /// <summary>
+    /// Flags for bulk data.
+    /// </summary>
+    internal BulkDataFlags BulkDataFlags;
+    /// <summary>
+    /// Number of elements in array.
+    /// </summary>
     internal int ElementCount;
-    /// <summary>Size of bulk data on disk.</summary>
+    /// <summary>
+    /// Size of bulk data on disk, in bytes. Affected by compression.
+    /// </summary>
     internal int BulkDataSizeOnDisk;
-    /// <summary>Offset of bulk data within file.</summary>
+    /// <summary>
+    /// Bulk data offset in file.
+    /// </summary>
     internal int BulkDataOffsetInFile;
 
     private byte[] BulkData;
@@ -34,67 +42,72 @@ public class FUntypedBulkData : ISerializable
     public ReadOnlySpan<byte> DataView => BulkData;
     public Span<byte> Data => BulkData;
 
-    public int Offset => BulkDataOffsetInFile;
+    public int Offset { get => BulkDataOffsetInFile; set => BulkDataOffsetInFile = value; }
     public int Size => BulkDataSizeOnDisk;
 
     #endregion
 
-    public FUntypedBulkData() { }
-    public FUntypedBulkData(BulkDataFlags flags, int uncompressedSize, int sizeInFile, int offsetInFile)
-    {
-        BulkDataFlags = flags;
-        ElementCount = uncompressedSize;
-        BulkDataSizeOnDisk = sizeInFile;
-        BulkDataOffsetInFile = offsetInFile;
-    }
-
     public void Serialize(UnrealArchive Ar)
     {
-        Debug.Assert(Ar.IsLoading);
+        if (!Ar.IsLoading && !IsStoredInSeparateFile)
+        {
+            BulkDataOffsetInFile = (int)Ar.Position + (sizeof(int) * 4);
+        }
 
         Ar.Serialize(ref BulkDataFlags);
         Ar.Serialize(ref ElementCount);
         Ar.Serialize(ref BulkDataSizeOnDisk);
         Ar.Serialize(ref BulkDataOffsetInFile);
 
-        // Skip over any inlined bulk data.
         if (!IsStoredInSeparateFile)
         {
-            Ar.Position += BulkDataSizeOnDisk;
+            // Check offset is valid
+            ArgumentOutOfRangeException.ThrowIfNotEqual(Ar.Position, BulkDataOffsetInFile);
+
+            // Read in inlined data
+            if (ContainsData)
+            {
+                if (!Ar.IsLoading)
+                {
+                    Ar.Write(BulkData, 0, BulkDataSizeOnDisk);
+                }
+                else
+                {
+                    BulkData = ArrayPool<byte>.Shared.Rent(BulkDataSizeOnDisk);
+                    Ar.ReadExactly(BulkData, 0, BulkDataSizeOnDisk);
+                }
+
+                // Ensure we've written / read the right amount of data
+                Debug.Assert(Ar.Position == BulkDataOffsetInFile + BulkDataSizeOnDisk);
+            }
         }
     }
 
-    /// <summary>
-    /// Reads the bulk data from disk into memory. Required stream is detailed in its parent UObject default properties,
-    /// commonly external texture file caches.
-    /// </summary>
-    /// <param name="Ar">An UnrealArchive containing the required data.</param>
     public void ReadData(UnrealArchive Ar)
     {
-        // If stored in separate file, how to write? Open and close? Find a shared stream?
-        if (!Ar.IsLoading) throw new NotImplementedException();
-
-        if (!ContainsData) return;
+        if (BulkData is not null || !ContainsData) return;
 
         Ar.Position = BulkDataOffsetInFile;
 
-        if (IsStoredCompressed)
+        if (ZLibCompressed)
         {
-            if (!ZLibCompressed) throw new Exception("ZLib is the only supported compression scheme");
-
-            if (Ar.IsLoading)
-            {
-                // This is not a good idea. Array should be sized and passed in beforehand
-                BulkData = GC.AllocateUninitializedArray<byte>(ElementCount);
-                CompressionManager.Decompress(Ar._buffer, BulkData);
-            }
-            else
-            {
-            }
+            BulkData = ArrayPool<byte>.Shared.Rent(ElementCount);
+            Compression.CompressionManager.Decompress(Ar._buffer, BulkData);
         }
         else
         {
-            Ar.Serialize(ref BulkData, ElementCount);
+            BulkData = ArrayPool<byte>.Shared.Rent(BulkDataSizeOnDisk);
+            Ar.ReadExactly(BulkData);
+        }             
+    }
+
+    public void Dispose()
+    {
+        if (BulkData is not null)
+        {
+            ArrayPool<byte>.Shared.Return(BulkData);
         }
+
+        GC.SuppressFinalize(this);
     }
 }
