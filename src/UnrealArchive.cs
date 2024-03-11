@@ -2,10 +2,14 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using UnrealLib.Core.Compression;
 using UnrealLib.Enums;
+using UnrealLib.Experimental.UnObj;
 using UnrealLib.Interfaces;
 
 namespace UnrealLib;
@@ -54,6 +58,11 @@ public class UnrealArchive : ErrorHelper<ArchiveError>, IDisposable
     internal UnrealArchive(Stream stream)
     {
         _buffer = stream;
+
+        if (stream is FileStream fs)
+        {
+            LastSavedFullPath = fs.Name;
+        }
     }
 
     public UnrealArchive(string path, FileMode mode = FileMode.Open, FileAccess access = FileAccess.ReadWrite, bool makeCopy = false)
@@ -458,6 +467,19 @@ public class UnrealArchive : ErrorHelper<ArchiveError>, IDisposable
     #endregion
 
     #endregion
+
+    public unsafe void BulkSerialize<T>(ref T[] value) where T : unmanaged
+    {
+        int SerializedElementSize = sizeof(T);
+        Serialize(ref SerializedElementSize);
+
+        Debug.Assert(SerializedElementSize == sizeof(T));
+
+        int newArrayNum = IsLoading ? default : value.Length;
+        Serialize(ref newArrayNum);
+
+        Serialize(ref value, newArrayNum);
+    }
 
     public virtual long SaveToFile(string? path = null)
     {
