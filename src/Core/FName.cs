@@ -86,7 +86,7 @@ public class FName : ISerializable
         // Exit early (invalid number suffix) if...
 
         // ...the underscore was the first/final char, or it wasn't found at all
-        if (index <= 0 || index == input.Length) return false;
+        if ((uint)index >= input.Length - 1) return false;
 
         // ...the number is padded, e.g. '_01' or '_00053'
         if (input[index + 1] == '0' && index + 1 != input.Length - 1) return false;

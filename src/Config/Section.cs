@@ -165,11 +165,11 @@ public class Section : ISerializable
 
             // Removes the last property with a matching Key and Value
             case ArrayOperator.Remove:
-                foreach (var prop in Properties)
+                for (int i = Properties.Count - 1; i >= 0; i--)
                 {
-                    if (property.EqualsCaseInsensitive(prop))
+                    if (property.EqualsCaseInsensitive(Properties[i]))
                     {
-                        Properties.Remove(prop);
+                        Properties.RemoveAt(i);
                     }
                 }
                 break;
