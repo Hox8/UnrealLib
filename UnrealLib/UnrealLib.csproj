@@ -1,0 +1,54 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>net10.0;net9.0</TargetFrameworks>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<IsAotCompatible>true</IsAotCompatible>
+		<EnableAotAnalyzer>true</EnableAotAnalyzer>
+	</PropertyGroup>
+
+	<!-- Configurable preprocessor macros. -->
+	<PropertyGroup>
+		<!-- SLIM_BUILD -->
+		<!-- If set, excludes much of the functionality of this library, including UObject manipulation, package creation/modification, and more. -->
+		<DefineConstants>$(DefineConstants);SLIM_BUILD</DefineConstants>
+
+		<!-- WITH_LOGGING -->
+		<!-- If set, enables the printing of debug messages via UDebug.Log(). -->
+		<DefineConstants>$(DefineConstants);WITH_LOGGING</DefineConstants>
+
+		<!-- WITH_LOGGING_SLOW -->
+		<!-- If set, enables the printing of SLOW debug messages via UDebug.LogSlow() and UDebug.WarnSlow(). -->
+		<!--<DefineConstants>$(DefineConstants);WITH_LOGGING_SLOW</DefineConstants>-->
+	</PropertyGroup>
+
+	<!-- Automatic platform preprocessor macros. -->
+	<PropertyGroup>
+		<DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(DefineConstants);WINDOWS</DefineConstants>
+		<DefineConstants Condition="$([MSBuild]::IsOSPlatform('Linux'))">$(DefineConstants);UNIX;LINUX</DefineConstants>
+		<DefineConstants Condition="$([MSBuild]::IsOSPlatform('OSX'))">$(DefineConstants);UNIX;MACOSX</DefineConstants>
+	</PropertyGroup>
+
+	<Choose>
+		<!-- Slim build actions. -->
+		<When Condition="'$(DefineConstants.Contains(SLIM_BUILD))'">
+			<ItemGroup>
+				<!-- Remove the Object folder and all subfiles from the build process. They will also be hidden from the IDE! -->
+				<Compile Remove="Object\**" />
+			</ItemGroup>
+		</When>
+
+		<!-- Non-slim build actions. -->
+		<Otherwise>
+			<ItemGroup>
+				<!-- Enum extensions source generator -->
+				<ProjectReference Include="..\..\NetEscapades.EnumGenerators\src\NetEscapades.EnumGenerators\NetEscapades.EnumGenerators.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" ExcludeAssets="compile;runtime" />
+
+				<!-- UProperty source generator -->
+				<ProjectReference Include="..\PropertyGenerator\PropertyGenerator.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" ExcludeAssets="compile;runtime" />
+			</ItemGroup>
+		</Otherwise>
+	</Choose>
+
+</Project>
